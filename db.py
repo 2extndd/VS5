@@ -75,15 +75,26 @@ def convert_sqlite_to_postgres(sql_script):
     # Convert NUMERIC to appropriate PostgreSQL types
     sql_script = sql_script.replace('NUMERIC', 'BIGINT')
     
-    # Replace INSERT OR IGNORE with PostgreSQL ON CONFLICT
+    # Convert IF NOT EXISTS for CREATE TABLE (PostgreSQL supports this)
+    # But handle INSERT statements properly
     sql_script = sql_script.replace('INSERT OR IGNORE INTO', 'INSERT INTO')
-    if 'ON CONFLICT' not in sql_script and 'INSERT INTO parameters' in sql_script:
-        sql_script = sql_script.replace(
-            'INSERT INTO parameters (key, value)', 
-            'INSERT INTO parameters (key, value) ON CONFLICT (key) DO NOTHING'
-        )
     
-    return sql_script
+    # For PostgreSQL, we need to handle INSERT statements with ON CONFLICT
+    # Split into statements and process each one
+    statements = []
+    for statement in sql_script.split(';'):
+        statement = statement.strip()
+        if statement:
+            # Handle INSERT INTO parameters specifically
+            if 'INSERT INTO parameters' in statement and 'ON CONFLICT' not in statement:
+                # Add ON CONFLICT for parameters table which has PRIMARY KEY
+                statement = statement.replace(
+                    'INSERT INTO parameters (key, value) VALUES',
+                    'INSERT INTO parameters (key, value) VALUES'
+                ) + ' ON CONFLICT (key) DO NOTHING'
+            statements.append(statement)
+    
+    return ';\n'.join(statements) + ';'
 
 
 # Legacy function name for compatibility
