@@ -42,23 +42,39 @@ def create_or_update_db(db_path):
         with open(db_path, "r") as sql_file:
             sql_script = sql_file.read()
             
+        print(f"Database type: {db_type}")
+        print(f"Executing database creation script: {db_path}")
+            
         if db_type == 'postgresql':
             # Convert SQLite-specific syntax to PostgreSQL
             sql_script = convert_sqlite_to_postgres(sql_script)
+            print("Converted SQL script for PostgreSQL:")
+            print(sql_script[:500] + "..." if len(sql_script) > 500 else sql_script)
             
             # Execute statements one by one for PostgreSQL
-            statements = sql_script.split(';')
-            for statement in statements:
-                statement = statement.strip()
+            statements = [s.strip() for s in sql_script.split(';') if s.strip()]
+            for i, statement in enumerate(statements):
                 if statement and not statement.startswith('--'):
-                    cursor.execute(statement)
+                    try:
+                        print(f"Executing statement {i+1}/{len(statements)}: {statement[:100]}...")
+                        cursor.execute(statement)
+                        print(f"Statement {i+1} executed successfully")
+                    except Exception as e:
+                        print(f"Error executing statement {i+1}: {e}")
+                        print(f"Statement was: {statement}")
+                        raise
         else:
             # SQLite can use executescript
             cursor.executescript(sql_script)
 
         conn.commit()
-    except Exception:
+        print("Database creation/update completed successfully")
+    except Exception as e:
+        print(f"Error in create_or_update_db: {e}")
         print_exc()
+        if conn:
+            conn.rollback()
+        raise
     finally:
         if conn:
             conn.close()
@@ -75,26 +91,31 @@ def convert_sqlite_to_postgres(sql_script):
     # Convert NUMERIC to appropriate PostgreSQL types
     sql_script = sql_script.replace('NUMERIC', 'BIGINT')
     
-    # Convert IF NOT EXISTS for CREATE TABLE (PostgreSQL supports this)
-    # But handle INSERT statements properly
+    # Convert INSERT OR IGNORE to INSERT with ON CONFLICT
     sql_script = sql_script.replace('INSERT OR IGNORE INTO', 'INSERT INTO')
     
-    # For PostgreSQL, we need to handle INSERT statements with ON CONFLICT
-    # Split into statements and process each one
+    # Split statements by semicolon and clean up
     statements = []
     for statement in sql_script.split(';'):
         statement = statement.strip()
-        if statement:
-            # Handle INSERT INTO parameters specifically
-            if 'INSERT INTO parameters' in statement and 'ON CONFLICT' not in statement:
-                # Add ON CONFLICT for parameters table which has PRIMARY KEY
-                statement = statement.replace(
-                    'INSERT INTO parameters (key, value) VALUES',
-                    'INSERT INTO parameters (key, value) VALUES'
-                ) + ' ON CONFLICT (key) DO NOTHING'
-            statements.append(statement)
+        if statement and not statement.startswith('--') and statement != '':
+            # Skip empty statements and comments
+            if len(statement) > 3:  # Minimum meaningful statement length
+                statements.append(statement)
     
-    return ';\n'.join(statements) + ';'
+    # Process each statement for PostgreSQL compatibility
+    processed_statements = []
+    for statement in statements:
+        # Handle multi-line INSERT INTO parameters VALUES
+        if ('INSERT INTO parameters' in statement and 
+            'VALUES' in statement and 
+            'ON CONFLICT' not in statement):
+            # For parameters table with PRIMARY KEY, add ON CONFLICT
+            statement = statement + ' ON CONFLICT (key) DO NOTHING'
+        
+        processed_statements.append(statement)
+    
+    return ';\n'.join(processed_statements) + ';'
 
 
 # Legacy function name for compatibility

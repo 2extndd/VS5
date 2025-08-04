@@ -17,7 +17,8 @@ def scraper_process(items_queue):
     logger.info("Scrape process started")
 
     # Get the query refresh delay from the database
-    current_query_refresh_delay = int(db.get_parameter("query_refresh_delay"))
+    query_refresh_delay_param = db.get_parameter("query_refresh_delay")
+    current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
     logger.info(f"Using query refresh delay of {current_query_refresh_delay} seconds")
 
     scraper_scheduler = BackgroundScheduler()
@@ -85,7 +86,8 @@ def check_refresh_delay(items_queue):
 
     # Get the current value from the database
     try:
-        new_delay = int(db.get_parameter("query_refresh_delay"))
+        query_refresh_delay_param = db.get_parameter("query_refresh_delay")
+        new_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
 
         # If the delay has changed, update the scheduler
         if new_delay != current_query_refresh_delay:
@@ -153,9 +155,9 @@ def monitor_processes(items_queue, telegram_queue, rss_queue):
 
 def plugin_checker():
     # Get telegram and rss enable status
-    telegram_enabled = db.get_parameter('telegram_enabled')
+    telegram_enabled = db.get_parameter('telegram_enabled') or 'False'
     logger.info("Telegram enabled: {}".format(telegram_enabled))
-    rss_enabled = db.get_parameter('rss_enabled')
+    rss_enabled = db.get_parameter('rss_enabled') or 'False'
     logger.info("RSS enabled: {}".format(rss_enabled))
 
     # Reset process status at startup
@@ -195,7 +197,8 @@ if __name__ == "__main__":
 
     # 1. Create and start the scrape process
     # This process will scrape items and put them in the items_queue
-    current_query_refresh_delay = int(db.get_parameter("query_refresh_delay"))
+    query_refresh_delay_param = db.get_parameter("query_refresh_delay")
+    current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
     scrape_process = multiprocessing.Process(target=scraper_process, args=(items_queue,))
     scrape_process.start()
 
