@@ -217,6 +217,11 @@ def check_proxy(proxy: str) -> bool:
 def convert_proxy_string_to_dict(proxy: Optional[str]) -> dict:
     """
     Convert a proxy string to a dictionary format.
+    Supports formats:
+    - ip:port
+    - user:pass@ip:port  
+    - protocol://ip:port
+    - protocol://user:pass@ip:port
 
     Args:
         proxy (Optional[str]): Proxy string to convert.
@@ -227,15 +232,33 @@ def convert_proxy_string_to_dict(proxy: Optional[str]) -> dict:
     if proxy is None:
         return {}
 
+    # Handle protocol-specified proxies
     if '://' in proxy:
-        # Protocol is specified (e.g., "http://127.0.0.1:8080")
-        protocol, address = proxy.split('://')
+        protocol, address = proxy.split('://', 1)
+        
+        # Check if there's authentication info
+        if '@' in address:
+            # Format: protocol://user:pass@ip:port
+            auth_part, host_part = address.split('@', 1)
+            proxy_url = f"{protocol}://{auth_part}@{host_part}"
+        else:
+            # Format: protocol://ip:port
+            proxy_url = proxy
+            
         if protocol == "http":
-            return {"http": f"{proxy}", "https": f"{proxy}"}
-        return {protocol: proxy}
+            return {"http": proxy_url, "https": proxy_url}
+        return {protocol: proxy_url}
     else:
-        # Protocol is not specified, default to http
-        return {"http": f"http://{proxy}", "https": f"https://{proxy}"}
+        # No protocol specified
+        if '@' in proxy:
+            # Format: user:pass@ip:port
+            auth_part, host_part = proxy.split('@', 1)
+            proxy_url = f"http://{auth_part}@{host_part}"
+        else:
+            # Format: ip:port
+            proxy_url = f"http://{proxy}"
+            
+        return {"http": proxy_url, "https": proxy_url}
 
 
 def configure_proxy(session: requests.Session, proxy: Optional[str] = None) -> bool:

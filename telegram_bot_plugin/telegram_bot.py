@@ -201,23 +201,54 @@ class LeRobot:
 
     ### TELEGRAM SPECIFIC FUNCTIONS ###
 
-    async def send_new_post(self, content, url, text, buy_url=None, buy_text=None):
+    async def send_new_post(self, content, url, text, buy_url=None, buy_text=None, thread_id=None):
         try:
             async with self.bot:
                 chat_ID = str(db.get_parameter("telegram_chat_id"))
                 buttons = [[InlineKeyboardButton(text=text, url=url)]]
                 if buy_url and buy_text:
                     buttons.append([InlineKeyboardButton(text=buy_text, url=buy_url)])
-                await self.bot.send_message(chat_ID, content, parse_mode="HTML",
-                                            read_timeout=40,
-                                            write_timeout=40,
-                                            reply_markup=InlineKeyboardMarkup(buttons))
+                
+                # Try to send to specific thread if thread_id is provided
+                try:
+                    if thread_id:
+                        await self.bot.send_message(
+                            chat_ID, 
+                            content, 
+                            parse_mode="HTML",
+                            read_timeout=40,
+                            write_timeout=40,
+                            reply_markup=InlineKeyboardMarkup(buttons),
+                            message_thread_id=thread_id
+                        )
+                    else:
+                        # Send to main chat if no thread_id
+                        await self.bot.send_message(
+                            chat_ID, 
+                            content, 
+                            parse_mode="HTML",
+                            read_timeout=40,
+                            write_timeout=40,
+                            reply_markup=InlineKeyboardMarkup(buttons)
+                        )
+                except Exception as thread_error:
+                    # If sending to thread fails, fallback to main chat
+                    logger.warning(f"Failed to send to thread {thread_id}: {thread_error}. Sending to main chat.")
+                    await self.bot.send_message(
+                        chat_ID, 
+                        content, 
+                        parse_mode="HTML",
+                        read_timeout=40,
+                        write_timeout=40,
+                        reply_markup=InlineKeyboardMarkup(buttons)
+                    )
+                    
         except RetryAfter as e:
             retry_after = e.retry_after
             logger.error(f"Flood control exceeded. Retrying in {retry_after + 2} seconds")
             await asyncio.sleep(retry_after + 2)
             # Retry sending the message
-            await self.send_new_post(content, url, text, buy_url, buy_text)
+            await self.send_new_post(content, url, text, buy_url, buy_text, thread_id)
         except Exception as e:
             logger.error(f"Error sending new post: {str(e)}", exc_info=True)
 
@@ -236,8 +267,15 @@ class LeRobot:
         try:
             while 1:
                 if not self.new_items_queue.empty():
-                    content, url, text, buy_url, buy_text = self.new_items_queue.get()
-                    await self.send_new_post(content, url, text, buy_url, buy_text)
+                    queue_item = self.new_items_queue.get()
+                    # Handle both old format (5 items) and new format (6 items with thread_id)
+                    if len(queue_item) == 6:
+                        content, url, text, buy_url, buy_text, thread_id = queue_item
+                    else:
+                        content, url, text, buy_url, buy_text = queue_item
+                        thread_id = None
+                    
+                    await self.send_new_post(content, url, text, buy_url, buy_text, thread_id)
                 else:
                     await asyncio.sleep(0.1)
                     pass

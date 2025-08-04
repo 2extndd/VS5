@@ -251,8 +251,18 @@ def clear_item_queue(items_queue, new_items_queue):
                     brand=item.brand_title,
                     image=None if item.photo is None else item.photo
                 )
-                # add the item to the queue
-                new_items_queue.put((content, item.url, "Open Vinted", None, None))
+                # Get thread_id for this query
+                thread_id = None
+                try:
+                    # Get query details to extract thread_id
+                    current_query = next((q for q in db.get_queries() if q[0] == query_id), None)
+                    if current_query and len(current_query) > 4:
+                        thread_id = current_query[4]  # thread_id is the 5th element (index 4)
+                except Exception as e:
+                    logger.warning(f"Could not get thread_id for query {query_id}: {e}")
+                
+                # add the item to the queue with thread_id
+                new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id))
                 # new_items_queue.put((content, item.url, "Open Vinted", item.buy_url, "Open buy page"))
                 # Add the item to the db
                 db.add_item_to_db(id=item.id, timestamp=item.raw_timestamp, price=item.price, title=item.title,

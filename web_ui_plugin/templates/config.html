@@ -159,7 +159,11 @@
                                                           rows="3">{{ params.proxy_list }}</textarea>
                                                 <small class="form-text text-muted">List of proxies separated by
                                                     semicolons (;)<br>
-                                                    Format: http://ip:port or ip:port</small>
+                                                    Supported formats:<br>
+                                                    • ip:port<br>
+                                                    • user:pass@ip:port (with authentication)<br>
+                                                    • http://ip:port<br>
+                                                    • http://user:pass@ip:port</small>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="proxy_list_link" class="form-label">Proxy List Link</label>

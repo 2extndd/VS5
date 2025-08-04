@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS queries
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     query     TEXT,
     last_item NUMERIC,
-    query_name TEXT
+    query_name TEXT,
+    thread_id INTEGER DEFAULT NULL
 );
 
 -- Items table
@@ -57,7 +58,7 @@ VALUES ('telegram_enabled', 'False'),
        ('rss_max_items', '100'),
        ('rss_process_running', 'False'),
 
-       ('version', '1.0.3'),
+       ('version', '1.0.5'),
        ('github_url', 'https://github.com/Fuyucch1/Vinted-Notifications'),
 
        ('items_per_query', '20'),

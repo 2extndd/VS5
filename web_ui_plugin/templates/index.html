@@ -168,7 +168,10 @@
                             <i class="bi bi-list-ul"></i> List
                         </button>
                     </div>
-                    <a href="/items" class="btn btn-sm btn-outline-primary">View All</a>
+                    <a href="/items" class="btn btn-sm btn-outline-primary me-2">View All</a>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#clearItemsModal">
+                        <i class="bi bi-trash"></i> Clear All Items
+                    </button>
                 </div>
             </div>
             <div class="card-body">
@@ -416,4 +419,39 @@
         });
     });
 </script>
+
+<!-- Clear All Items Modal -->
+<div class="modal fade" id="clearItemsModal" tabindex="-1" aria-labelledby="clearItemsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="clearItemsModalLabel">Clear All Items</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Warning!</strong> This action will:
+                </div>
+                <ul class="mb-0">
+                    <li>Delete all found items from the database</li>
+                    <li>Reset all query timestamps</li>
+                    <li>Force the bot to rescan all queries</li>
+                    <li>Resend all items to Telegram channels/topics</li>
+                </ul>
+                <p class="mt-3 text-muted">
+                    <strong>Are you sure you want to proceed?</strong> This action cannot be undone.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="/clear_all_items" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Clear All Items
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

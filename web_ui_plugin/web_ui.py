@@ -53,11 +53,17 @@ def index():
         except:
             last_found_item = "Never"
 
+        # Get thread_id (5th element, index 4) if available
+        thread_id = None
+        if len(query) > 4:
+            thread_id = query[4]
+            
         formatted_queries.append({
             'id': i + 1,
             'query': query[0],
             'display': query_name if query_name else query[0],
-            'last_found_item': last_found_item
+            'last_found_item': last_found_item,
+            'thread_id': thread_id
         })
 
     # Get recent items
@@ -126,11 +132,17 @@ def queries():
         except:
             last_found_item = "Never"
 
+        # Get thread_id (5th element, index 4) if available
+        thread_id = None
+        if len(query) > 4:
+            thread_id = query[4]
+            
         formatted_queries.append({
             'id': i + 1,
             'query': query[0],
             'display': query_name if query_name else query[1],
-            'last_found_item': last_found_item
+            'last_found_item': last_found_item,
+            'thread_id': thread_id
         })
 
     return render_template('queries.html', queries=formatted_queries)
@@ -140,14 +152,76 @@ def queries():
 def add_query():
     query = request.form.get('query')
     query_name = request.form.get('query_name', '').strip()
+    thread_id = request.form.get('thread_id', '').strip()
+    
     if query:
+        # Convert thread_id to integer if provided
+        thread_id_int = None
+        if thread_id:
+            try:
+                thread_id_int = int(thread_id)
+            except ValueError:
+                flash('Invalid thread ID. Must be a number.', 'error')
+                return redirect(url_for('queries'))
+        
         message, is_new_query = core.process_query(query, name=query_name if query_name != '' else None)
+        
+        if is_new_query and thread_id_int:
+            # Update thread_id for the newly added query
+            all_queries = db.get_queries()
+            if all_queries:
+                # Find the query we just added (it should be the last one or have the matching query string)
+                for q in all_queries:
+                    if q[1] == query:  # q[1] is the query string
+                        db.update_query_thread_id(q[0], thread_id_int)  # q[0] is the query id
+                        break
+        
         if is_new_query:
             flash(f'Query added: {query}', 'success')
         else:
             flash(message, 'warning')
     else:
         flash('No query provided', 'error')
+
+    return redirect(url_for('queries'))
+
+
+@app.route('/update_thread_id', methods=['POST'])
+def update_thread_id():
+    query_id = request.form.get('query_id')
+    thread_id = request.form.get('thread_id', '').strip()
+    
+    if query_id:
+        # Convert thread_id to integer if provided, None if empty
+        thread_id_int = None
+        if thread_id:
+            try:
+                thread_id_int = int(thread_id)
+            except ValueError:
+                flash('Invalid thread ID. Must be a number.', 'error')
+                return redirect(url_for('queries'))
+        
+        # Find the actual database ID for this query
+        all_queries = db.get_queries()
+        db_query_id = None
+        for q in all_queries:
+            if str(q[0]) == query_id:  # Compare string representations
+                db_query_id = q[0]
+                break
+        
+        if db_query_id:
+            success = db.update_query_thread_id(db_query_id, thread_id_int)
+            if success:
+                if thread_id_int:
+                    flash(f'Thread ID updated to {thread_id_int}', 'success')
+                else:
+                    flash('Thread ID cleared', 'success')
+            else:
+                flash('Failed to update thread ID', 'error')
+        else:
+            flash('Query not found', 'error')
+    else:
+        flash('No query ID provided', 'error')
 
     return redirect(url_for('queries'))
 
@@ -161,6 +235,20 @@ def remove_query(query_id):
         flash(message, 'error')
 
     return redirect(url_for('queries'))
+
+
+@app.route('/clear_all_items', methods=['POST'])
+def clear_all_items():
+    """Clear all items from the database and reset query timestamps"""
+    success = db.clear_all_items()
+    if success:
+        flash('All items cleared successfully. Bot will rescan all queries and resend items to Telegram.', 'success')
+        logger.info("All items cleared from database via web interface")
+    else:
+        flash('Failed to clear items. Please try again.', 'error')
+        logger.error("Failed to clear items from database via web interface")
+    
+    return redirect(url_for('index'))
 
 
 @app.route('/remove_query/all', methods=['POST'])
