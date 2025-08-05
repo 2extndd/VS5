@@ -48,7 +48,14 @@ class Items:
         """
         # Extract the domain from the URL and set the locale
         locale = urlparse(url).netloc
-        requester.set_locale(locale)
+        
+        # Create a local requester instance if needed
+        if not hasattr(requester, 'set_locale'):
+            from pyVintedVN.requester import requester as requester_class
+            requester_instance = requester_class()
+            requester_instance.set_locale(locale)
+        else:
+            requester.set_locale(locale)
 
         # Parse the URL to get the API parameters
         params = self.parse_url(url, nbr_items, page, time)
