@@ -1069,10 +1069,10 @@ def send_items_to_telegram():
             conn, db_type = db.get_db_connection()
             cursor = conn.cursor()
             
-            # Get last 3 items
+            # Get last 3 items with thread_id
             if db_type == 'postgresql':
                 cursor.execute("""
-                    SELECT i.title, i.price, i.currency, q.query, i.timestamp 
+                    SELECT i.title, i.price, i.currency, q.query, i.timestamp, q.thread_id, q.query_name
                     FROM items i 
                     JOIN queries q ON i.query_id = q.id 
                     ORDER BY i.timestamp DESC 
@@ -1080,7 +1080,7 @@ def send_items_to_telegram():
                 """)
             else:
                 cursor.execute("""
-                    SELECT i.title, i.price, i.currency, q.query, i.timestamp 
+                    SELECT i.title, i.price, i.currency, q.query, i.timestamp, q.thread_id, q.query_name
                     FROM items i 
                     JOIN queries q ON i.query_id = q.id 
                     ORDER BY i.timestamp DESC 
@@ -1099,18 +1099,26 @@ def send_items_to_telegram():
             # Send each item to Telegram
             sent_count = 0
             for item in items:
-                title, price, currency, query_url, timestamp = item
+                title, price, currency, query_url, timestamp, thread_id, query_name = item
                 
-                # Create message content
-                content = f"🛍️ <b>{title}</b>\\n\\n💰 Цена: {price} {currency}\\n🔗 Запрос: {query_url[:50]}..."
+                # Create message content with query name if available
+                query_display = query_name if query_name else query_url[:50] + "..."
+                content = f"🛍️ <b>{title}</b>\\n\\n💰 Цена: {price} {currency}\\n📂 Запрос: {query_display}"
                 
-                # Send to Telegram
+                # Send to Telegram with thread_id support
                 api_url = f"https://api.telegram.org/bot{token}/sendMessage"
                 data = {
                     'chat_id': chat_id,
                     'text': content,
                     'parse_mode': 'HTML'
                 }
+                
+                # Add thread_id if specified
+                if thread_id:
+                    data['message_thread_id'] = int(thread_id)
+                    logger.info(f"📍 Sending item to thread_id: {thread_id} ({query_display})")
+                else:
+                    logger.info(f"📍 Sending item to main chat ({query_display})")
                 
                 response = req.post(api_url, data=data, timeout=10)
                 

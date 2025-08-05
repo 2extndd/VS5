@@ -22,8 +22,8 @@ class SimpleTelegramSender:
         
         logger.info("SimpleTelegramSender initialized")
         
-    def send_message(self, content, url=None, photo_url=None):
-        """Send message to Telegram using HTTP API"""
+    def send_message(self, content, url=None, photo_url=None, thread_id=None):
+        """Send message to Telegram using HTTP API with thread support"""
         try:
             api_url = f"https://api.telegram.org/bot{self.token}/sendMessage"
             
@@ -33,6 +33,13 @@ class SimpleTelegramSender:
                 'text': content,
                 'parse_mode': 'HTML'
             }
+            
+            # Add thread_id if provided (for topics/forums)
+            if thread_id:
+                data['message_thread_id'] = int(thread_id)
+                logger.info(f"📍 Sending to thread_id: {thread_id}")
+            else:
+                logger.info("📍 Sending to main chat (no thread_id)")
             
             # Add inline keyboard if URL provided
             if url:
@@ -74,15 +81,16 @@ class SimpleTelegramSender:
                     queue_item = self.items_queue.get()
                     logger.info(f"📦 Processing queue item: {queue_item}")
                     
-                    # Handle different queue formats
+                    # Handle different queue formats: (content, url, text, buy_url, buy_text, thread_id, photo_url)
                     if len(queue_item) >= 3:
                         content = queue_item[0]
                         url = queue_item[1] if len(queue_item) > 1 else None
+                        thread_id = queue_item[5] if len(queue_item) > 5 else None
                         photo_url = queue_item[6] if len(queue_item) > 6 else None
                         
-                        # Send to Telegram
-                        logger.info(f"📱 Sending to Telegram: {content[:50]}...")
-                        success = self.send_message(content, url, photo_url)
+                        # Send to Telegram with thread_id
+                        logger.info(f"📱 Sending to Telegram: {content[:50]}... (thread_id: {thread_id})")
+                        success = self.send_message(content, url, photo_url, thread_id)
                         
                         if success:
                             logger.info("✅ Item sent to Telegram successfully!")
