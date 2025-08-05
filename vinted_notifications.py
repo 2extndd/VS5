@@ -221,90 +221,43 @@ if __name__ == "__main__":
     telegram_queue = manager.Queue()
     logger.info("[DEBUG] Queues created successfully!")
 
-    # 1. Create and start the scrape process
-    # This process will scrape items and put them in the items_queue
-    logger.info("[DEBUG] Creating scraper process...")
+    # RAILWAY FIX: Use single process instead of multiprocessing
+    logger.info("[DEBUG] RAILWAY MODE: Starting single-process architecture...")
+    
+    # Get refresh delay
     query_refresh_delay_param = db.get_parameter("query_refresh_delay")
     current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
     logger.info(f"[DEBUG] Query refresh delay: {current_query_refresh_delay}")
-    scraper_proc = multiprocessing.Process(target=scraper_process, args=(items_queue,))
-    logger.info("[DEBUG] Starting scraper process...")
-    scraper_proc.start()
-    logger.info("[DEBUG] Scraper process started!")
-
-    # 2. Create the item extractor process
-    # This process will extract items from the items_queue and put them in the new_items_queue
-    logger.info("[DEBUG] Creating item extractor process...")
-    item_extractor_process = multiprocessing.Process(target=item_extractor, args=(items_queue, new_items_queue))
-    logger.info("[DEBUG] Starting item extractor process...")
-    item_extractor_process.start()
-    logger.info("[DEBUG] Item extractor process started!")
-
-    # 3. Create the dispatcher process
-    # This process will handle the new items and send them to the enabled services
-    logger.info("[DEBUG] Creating dispatcher process...")
-    dispatcher_process = multiprocessing.Process(target=dispatcher_function,
-                                                 args=(new_items_queue, rss_queue, telegram_queue,))
-    logger.info("[DEBUG] Starting dispatcher process...")
-    dispatcher_process.start()
-    logger.info("[DEBUG] Dispatcher process started!")
-
-    # 4. Create and start the Telegram bot process
-    # This process will handle telegram messages
-    logger.info("[DEBUG] Creating telegram bot process...")
-    telegram_bot_process_instance = multiprocessing.Process(target=telegram_bot_process, args=(telegram_queue,))
-    logger.info("[DEBUG] Starting telegram bot process...")
-    telegram_bot_process_instance.start()
-    logger.info("[DEBUG] Telegram bot process started!")
-
-    # 5. Set up a scheduler to monitor processes
-    # This will check the process status in the database and start/stop processes as needed
-    monitor_scheduler = BackgroundScheduler()
-    monitor_scheduler.add_job(monitor_processes, 'interval', seconds=5, args=[items_queue, telegram_queue, rss_queue],
-                              name="process_monitor")
-    monitor_scheduler.start()
-
-    # 6. Create and start the Web UI process
-    # This process will provide a web interface to control the application
-    logger.info("[DEBUG] Creating web UI process...")
-    web_ui_process_instance = multiprocessing.Process(target=web_ui_process)
-    logger.info("[DEBUG] Starting web UI process...")
-    web_ui_process_instance.start()
-    logger.info("[DEBUG] Web UI process started!")
     
-    # Port will be logged by the web UI process itself
+    # Start scraper scheduler in the main process
+    logger.info("[DEBUG] Starting scraper scheduler...")
+    scraper_scheduler = BackgroundScheduler()
+    scraper_scheduler.add_job(core.process_items, 'interval', seconds=current_query_refresh_delay, 
+                             args=[items_queue], name="scraper")
+    scraper_scheduler.start()
+    logger.info("[DEBUG] Scraper scheduler started!")
+    
+    # Start monitor scheduler  
+    monitor_scheduler = BackgroundScheduler()
+    monitor_scheduler.add_job(monitor_processes, 'interval', seconds=5, 
+                             args=[items_queue, telegram_queue, rss_queue], name="process_monitor")
+    monitor_scheduler.start()
+    logger.info("[DEBUG] Monitor scheduler started!")
+
+    # Start Web UI in the main process
+    logger.info("[DEBUG] Starting Web UI in main process...")
     port = int(os.environ.get('PORT', configuration_values.WEB_UI_PORT))
     logger.info(f"Web UI starting on port {port}")
-
-
+    
+    # Import and start web UI directly
+    from web_ui_plugin.web_ui import app
+    logger.info("[DEBUG] Web UI app imported, starting server...")
+    
     try:
-        # Wait for processes to finish (which they won't unless interrupted)
-        scraper_proc.join()
-        item_extractor_process.join()
-        dispatcher_process.join()
-        telegram_bot_process_instance.join()
-        web_ui_process_instance.join()
-
+        # This will block and serve the web UI
+        app.run(host='0.0.0.0', port=port, debug=False)
     except KeyboardInterrupt:
-        # Handle Ctrl+C gracefully
         logger.info("Main process interrupted")
-
-        # Shutdown the monitor scheduler
+        scraper_scheduler.shutdown()
         monitor_scheduler.shutdown()
-
-        # Terminate all processes
-        scraper_proc.terminate()
-        item_extractor_process.terminate()
-        dispatcher_process.terminate()
-        telegram_bot_process_instance.terminate()
-        # Terminate web UI process
-        web_ui_process_instance.terminate()
-
-        # Wait for all processes to terminate
-        scraper_proc.join()
-        item_extractor_process.join()
-        dispatcher_process.join()
-        telegram_bot_process_instance.join()
-        web_ui_process_instance.join()
-
-        logger.info("All processes terminated")
+        logger.info("All schedulers stopped")
