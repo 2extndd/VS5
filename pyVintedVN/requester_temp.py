@@ -43,30 +43,6 @@ class requester:
         else:
             self.set_cookies()
 
-    def set_locale(self, locale):
-        """
-        Set the locale of the requester.
-        Updates the authentication URL and headers to use the specified locale.
-        
-        Args:
-            locale (str): The locale domain to use (e.g., 'www.vinted.fr', 'www.vinted.de')
-        """
-        if self.debug:
-            logger.info(f"[DEBUG] Setting locale to: {locale}")
-        logger.debug(f"Setting locale to: {locale}")
-        
-        # Update headers for the specific locale
-        locale_headers = {
-            "Host": f"{locale}",
-            "Referer": f"https://{locale}/",
-            "Origin": f"https://{locale}",
-        }
-        self.session.headers.update(locale_headers)
-        
-        if self.debug:
-            logger.info(f"[DEBUG] Locale set to {locale}")
-        logger.debug(f"Locale set to {locale}")
-
     def set_cookies(self, cookie=None):
         logger.debug("Setting up cookies")
         if self.debug:

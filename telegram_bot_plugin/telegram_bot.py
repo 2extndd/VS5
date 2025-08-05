@@ -68,6 +68,7 @@ class LeRobot:
     async def open_web_app(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Open Telegram Mini App with Web UI"""
         try:
+            # Import inside the function to avoid circular imports
             from telegram import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
             
             # Create web app URL from Railway environment or fallback
@@ -90,15 +91,31 @@ class LeRobot:
                 parse_mode="HTML",
                 reply_markup=reply_markup
             )
+            logger.info("Web app message sent successfully")
+        except ImportError as ie:
+            logger.error(f"Import error in open_web_app: {str(ie)}", exc_info=True)
+            try:
+                await update.message.reply_text(
+                    '🌐 <b>Web Interface</b>\n\n'
+                    'Access the bot management interface at:\n'
+                    'https://vs5-production.up.railway.app/\n\n'
+                    '📱 <i>This link works on any device with a web browser.</i>',
+                    parse_mode="HTML"
+                )
+            except Exception as fallback_error:
+                logger.error(f"Fallback message also failed: {str(fallback_error)}", exc_info=True)
         except Exception as e:
             logger.error(f"Error opening web app: {str(e)}", exc_info=True)
             try:
                 await update.message.reply_text(
-                    '❌ Error opening web interface. You can access it directly at:\n'
-                    'https://vs5-production.up.railway.app/'
+                    '🌐 <b>Web Interface</b>\n\n'
+                    'Access the bot management interface at:\n'
+                    'https://vs5-production.up.railway.app/\n\n'
+                    '📱 <i>This link works on any device with a web browser.</i>',
+                    parse_mode="HTML"
                 )
-            except:
-                pass
+            except Exception as fallback_error:
+                logger.error(f"Fallback message also failed: {str(fallback_error)}", exc_info=True)
 
     ### QUERIES ###
 
