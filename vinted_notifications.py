@@ -36,10 +36,15 @@ def scraper_process(items_queue):
 
 def item_extractor(items_queue, new_items_queue):
     logger.info("Item extractor process started")
+    print("[DEBUG] Item extractor process started")
     try:
+        loop_count = 0
         while True:
             # Check if there's an item in the queue
             core.clear_item_queue(items_queue, new_items_queue)
+            loop_count += 1
+            if loop_count % 100 == 0:  # Log every 10 seconds (100 * 0.1s)
+                print(f"[DEBUG] Item extractor loop count: {loop_count}")
             time.sleep(0.1)  # Small sleep to prevent high CPU usage
     except (KeyboardInterrupt, SystemExit):
         logger.info("Consumer process stopped")
