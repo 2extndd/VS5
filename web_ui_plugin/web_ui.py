@@ -160,6 +160,74 @@ def diagnose():
             'timestamp': datetime.now().isoformat()
         })
 
+@app.route('/force_start')
+def force_start():
+    """Принудительный запуск процесса сканирования"""
+    try:
+        import sys
+        import os
+        import threading
+        import queue
+        
+        # Добавляем пути
+        sys.path.append('/app')
+        sys.path.append('.')
+        
+        # Тестируем импорт
+        try:
+            import core
+            logger.info("✅ Core импортирован успешно")
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'Ошибка импорта core: {e}',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        # Создаем тестовую очередь
+        test_queue = queue.Queue()
+        
+        # Тестируем запуск process_items
+        def test_run():
+            try:
+                logger.info("🚀 Тестовый запуск process_items...")
+                result = core.process_items(test_queue)
+                return f"SUCCESS: {result}"
+            except Exception as e:
+                import traceback
+                return f"ERROR: {e}\\n{traceback.format_exc()}"
+        
+        # Запускаем в потоке с таймаутом
+        import concurrent.futures
+        
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(test_run)
+            try:
+                result = future.result(timeout=30)  # 30 секунд таймаут
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Process_items executed successfully',
+                    'result': result,
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+            except concurrent.futures.TimeoutError:
+                return jsonify({
+                    'status': 'timeout',
+                    'message': 'Process_items execution timed out after 30 seconds',
+                    'timestamp': datetime.now().isoformat()
+                })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': f'Force start error: {e}',
+            'traceback': traceback.format_exc(),
+            'timestamp': datetime.now().isoformat()
+        })
+
 @app.route('/')
 def index():
     # Get parameters
