@@ -394,6 +394,14 @@ def index():
 def queries():
     # Get queries
     all_queries = db.get_queries()
+    
+    # DEBUG: Log query structure
+    logger.info(f"[DEBUG] Got {len(all_queries)} queries from database")
+    for i, query in enumerate(all_queries[:3]):  # Log first 3
+        logger.info(f"[DEBUG] Query {i}: {query} (length: {len(query)})")
+        if len(query) > 4:
+            logger.info(f"[DEBUG] Query {i} thread_id: '{query[4]}' (type: {type(query[4])})")
+    
     formatted_queries = []
     for i, query in enumerate(all_queries):
         parsed_query = urlparse(query[1])
@@ -417,6 +425,9 @@ def queries():
         thread_id = None
         if len(query) > 4:
             thread_id = query[4]
+            
+        # DEBUG: Log thread_id extraction
+        logger.info(f"[DEBUG] Query {i+1} ({query_name}): thread_id raw='{query[4] if len(query) > 4 else 'NO_INDEX_4'}', processed='{thread_id}'")
             
         formatted_queries.append({
             'id': i + 1,
