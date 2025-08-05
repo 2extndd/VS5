@@ -49,13 +49,10 @@ class Items:
         # Extract the domain from the URL and set the locale
         locale = urlparse(url).netloc
         
-        # Create a local requester instance if needed
-        if not hasattr(requester, 'set_locale'):
-            from pyVintedVN.requester import requester as requester_class
-            requester_instance = requester_class()
-            requester_instance.set_locale(locale)
-        else:
-            requester.set_locale(locale)
+        # Create a local requester instance with proxy support
+        from pyVintedVN.requester import requester as requester_class
+        requester_instance = requester_class(with_proxy=True, debug=True)
+        requester_instance.set_locale(locale)
 
         # Parse the URL to get the API parameters
         params = self.parse_url(url, nbr_items, page, time)
@@ -64,8 +61,8 @@ class Items:
         api_url = f"https://{locale}{Urls.VINTED_API_URL}/{Urls.VINTED_PRODUCTS_ENDPOINT}"
 
         try:
-            # Make the request to the Vinted API
-            response = requester.get(url=api_url, params=params)
+            # Make the request to the Vinted API using the local instance
+            response = requester_instance.get(url=api_url, params=params)
             response.raise_for_status()
 
             # Parse the response

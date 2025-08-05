@@ -58,12 +58,16 @@ class requester:
         """Настройка прокси"""
         try:
             import proxies
+            logger.info(f"[DEBUG] Configuring proxy for requester...")
             proxy_configured = proxies.configure_proxy(self.session)
-            if self.debug and proxy_configured:
-                logger.info(f"[DEBUG] Proxy configured: {self.session.proxies}")
+            if proxy_configured:
+                logger.info(f"[DEBUG] Proxy configured successfully: {self.session.proxies}")
+            else:
+                logger.info(f"[DEBUG] No proxy configured - using direct connection")
         except Exception as e:
-            if self.debug:
-                logger.info(f"[DEBUG] Proxy configuration failed: {e}")
+            logger.error(f"[DEBUG] Proxy configuration failed: {e}")
+            import traceback
+            logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
     
     def get_access_token(self):
         """Получение access_token_web для Bearer авторизации"""

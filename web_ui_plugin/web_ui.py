@@ -33,6 +33,39 @@ def inject_current_year():
     return {'current_year': datetime.now().year}
 
 
+@app.route('/fix_settings')
+def fix_settings():
+    """Автоматическое исправление настроек для работы бота"""
+    try:
+        # Устанавливаем критические параметры
+        updates = {
+            'enable_logging': 'True',
+            'query_refresh_delay': '300',  # 5 минут
+            'max_retries': '3',
+            'request_timeout': '30',
+            'items_per_query': '2'
+        }
+        
+        results = []
+        for key, value in updates.items():
+            try:
+                db.set_parameter(key, value)
+                results.append(f"✅ {key} = {value}")
+            except Exception as e:
+                results.append(f"❌ {key}: {e}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Настройки обновлены!',
+            'results': results
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Ошибка: {e}'
+        })
+
 @app.route('/')
 def index():
     # Get parameters
