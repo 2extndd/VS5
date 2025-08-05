@@ -20,12 +20,33 @@ def scraper_process(items_queue):
     current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
     logger.info(f"Using query refresh delay of {current_query_refresh_delay} seconds")
 
+    # Test if core.process_items is callable
+    logger.info(f"[DEBUG] core.process_items type: {type(core.process_items)}")
+    logger.info(f"[DEBUG] core.process_items callable: {callable(core.process_items)}")
+    
     scraper_scheduler = BackgroundScheduler()
-    scraper_scheduler.add_job(core.process_items, 'interval', seconds=current_query_refresh_delay, args=[items_queue],
-                              name="scraper")
+    logger.info("[DEBUG] Created BackgroundScheduler")
+    
+    try:
+        scraper_scheduler.add_job(core.process_items, 'interval', seconds=current_query_refresh_delay, args=[items_queue],
+                                  name="scraper")
+        logger.info("[DEBUG] Successfully added job to scheduler")
+    except Exception as e:
+        logger.error(f"[ERROR] Failed to add job to scheduler: {e}")
+        import traceback
+        logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
+        return
+    
     logger.info("[DEBUG] Starting scheduler...")
-    scraper_scheduler.start()
-    logger.info("[DEBUG] Scheduler started! Entering main loop...")
+    try:
+        scraper_scheduler.start()
+        logger.info("[DEBUG] Scheduler started! Entering main loop...")
+    except Exception as e:
+        logger.error(f"[ERROR] Failed to start scheduler: {e}")
+        import traceback
+        logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
+        return
+    
     try:
         # Keep the process running
         while True:
