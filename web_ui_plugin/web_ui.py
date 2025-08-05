@@ -1048,6 +1048,102 @@ def force_telegram_bot():
         })
 
 
+@app.route('/send_items_to_telegram')
+def send_items_to_telegram():
+    """Directly send found items to Telegram"""
+    try:
+        import requests as req
+        
+        # Get Telegram credentials
+        token = db.get_parameter("telegram_token")
+        chat_id = db.get_parameter("telegram_chat_id")
+        
+        if not token or not chat_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'Telegram credentials not configured'
+            })
+        
+        # Get recent items from database
+        try:
+            conn, db_type = db.get_db_connection()
+            cursor = conn.cursor()
+            
+            # Get last 3 items
+            if db_type == 'postgresql':
+                cursor.execute("""
+                    SELECT i.title, i.price, i.currency, q.query, i.timestamp 
+                    FROM items i 
+                    JOIN queries q ON i.query_id = q.id 
+                    ORDER BY i.timestamp DESC 
+                    LIMIT 3
+                """)
+            else:
+                cursor.execute("""
+                    SELECT i.title, i.price, i.currency, q.query, i.timestamp 
+                    FROM items i 
+                    JOIN queries q ON i.query_id = q.id 
+                    ORDER BY i.timestamp DESC 
+                    LIMIT 3
+                """)
+            
+            items = cursor.fetchall()
+            conn.close()
+            
+            if not items:
+                return jsonify({
+                    'status': 'warning',
+                    'message': 'No items found in database'
+                })
+            
+            # Send each item to Telegram
+            sent_count = 0
+            for item in items:
+                title, price, currency, query_url, timestamp = item
+                
+                # Create message content
+                content = f"🛍️ <b>{title}</b>\\n\\n💰 Цена: {price} {currency}\\n🔗 Запрос: {query_url[:50]}..."
+                
+                # Send to Telegram
+                api_url = f"https://api.telegram.org/bot{token}/sendMessage"
+                data = {
+                    'chat_id': chat_id,
+                    'text': content,
+                    'parse_mode': 'HTML'
+                }
+                
+                response = req.post(api_url, data=data, timeout=10)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('ok'):
+                        sent_count += 1
+                        logger.info(f"✅ Item sent to Telegram: {title}")
+                    else:
+                        logger.error(f"❌ Telegram API error for {title}: {result}")
+                else:
+                    logger.error(f"❌ HTTP error for {title}: {response.status_code}")
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Sent {sent_count}/{len(items)} items to Telegram',
+                'sent_count': sent_count,
+                'total_items': len(items)
+            })
+            
+        except Exception as db_error:
+            return jsonify({
+                'status': 'error',
+                'message': f'Database error: {db_error}'
+            })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error sending items to Telegram: {e}'
+        })
+
+
 def web_ui_process():
     logger.info("Web UI process started")
     
