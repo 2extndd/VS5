@@ -19,8 +19,9 @@ class SimpleTelegramSender:
         self.token = db.get_parameter("telegram_token")
         self.chat_id = db.get_parameter("telegram_chat_id")
         self.running = False
+        self.last_update_id = 0  # For processing Telegram updates
         
-        logger.info("SimpleTelegramSender initialized")
+        logger.info("SimpleTelegramSender initialized with command handling")
         
     def send_message(self, content, url=None, photo_url=None, thread_id=None):
         """Send message to Telegram using HTTP API with thread support and photo attachments"""
@@ -106,6 +107,9 @@ class SimpleTelegramSender:
         
         while self.running:
             try:
+                # Process incoming Telegram commands
+                self.process_telegram_updates()
+                
                 if not self.items_queue.empty():
                     # Get item from queue
                     queue_item = self.items_queue.get()
@@ -137,6 +141,138 @@ class SimpleTelegramSender:
                 logger.error(f"❌ Error in monitoring loop: {e}")
                 time.sleep(5)  # Wait before retrying
     
+    def process_telegram_updates(self):
+        """Check for incoming Telegram messages and process commands"""
+        try:
+            # Get updates from Telegram
+            url = f"https://api.telegram.org/bot{self.token}/getUpdates"
+            params = {
+                'offset': self.last_update_id + 1,
+                'timeout': 1,  # Short timeout for non-blocking
+                'limit': 10
+            }
+            
+            response = requests.get(url, params=params, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('ok') and data.get('result'):
+                    for update in data['result']:
+                        self.last_update_id = update['update_id']
+                        
+                        # Process message if present
+                        if 'message' in update:
+                            self.handle_message(update['message'])
+                            
+        except Exception as e:
+            logger.warning(f"⚠️ Error processing Telegram updates: {e}")
+    
+    def handle_message(self, message):
+        """Handle incoming Telegram message and process commands"""
+        try:
+            text = message.get('text', '')
+            chat_id = message.get('chat', {}).get('id')
+            
+            # Only process messages from our configured chat
+            if str(chat_id) != str(self.chat_id):
+                return
+                
+            # Process commands
+            if text.startswith('/'):
+                self.handle_command(text, message)
+                
+        except Exception as e:
+            logger.error(f"❌ Error handling message: {e}")
+    
+    def handle_command(self, command_text, message):
+        """Handle specific Telegram commands"""
+        try:
+            command = command_text.split()[0].lower()
+            
+            if command == '/hello':
+                self.send_simple_message("🤖 <b>Vinted Bot is running!</b>\n\n✅ Bot is active and monitoring queries.")
+                
+            elif command == '/app':
+                web_url = "https://vs5-production.up.railway.app"
+                keyboard = {
+                    'inline_keyboard': [[{
+                        'text': '🌐 Open Web Interface',
+                        'web_app': {'url': web_url}
+                    }]]
+                }
+                self.send_simple_message(
+                    "🌐 <b>Vinted Web Interface</b>\n\n"
+                    "Click the button below to open the web interface:",
+                    keyboard
+                )
+                
+            elif command == '/queries':
+                # Get queries from database
+                queries = db.get_queries()
+                if queries:
+                    response = "📋 <b>Active Queries:</b>\n\n"
+                    for i, query in enumerate(queries, 1):
+                        query_name = query[3] if query[3] else f"Query {i}"
+                        thread_id = f" (Thread: {query[4]})" if query[4] else ""
+                        response += f"{i}. <b>{query_name}</b>{thread_id}\n"
+                else:
+                    response = "📋 <b>No active queries found.</b>\n\nAdd queries via Web UI."
+                    
+                self.send_simple_message(response)
+                
+            elif command in ['/add_query', '/remove_query', '/allowlist', '/clear_allowlist', '/add_country', '/remove_country']:
+                self.send_simple_message(
+                    f"ℹ️ <b>Command: {command}</b>\n\n"
+                    "This command is available via Web Interface:\n"
+                    "🌐 https://vs5-production.up.railway.app\n\n"
+                    "Use /app to open the Web UI."
+                )
+                
+            else:
+                self.send_simple_message(
+                    "❓ <b>Unknown command</b>\n\n"
+                    "Available commands:\n"
+                    "• /hello - Check bot status\n"
+                    "• /app - Open Web Interface\n"
+                    "• /queries - List active queries\n\n"
+                    "For more features, use /app to open Web UI."
+                )
+                
+        except Exception as e:
+            logger.error(f"❌ Error handling command {command_text}: {e}")
+            self.send_simple_message("❌ <b>Error processing command</b>\n\nPlease try again.")
+    
+    def send_simple_message(self, text, keyboard=None):
+        """Send a simple text message (for commands)"""
+        try:
+            url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+            data = {
+                'chat_id': self.chat_id,
+                'text': text,
+                'parse_mode': 'HTML'
+            }
+            
+            if keyboard:
+                import json
+                data['reply_markup'] = json.dumps(keyboard)
+            
+            response = requests.post(url, data=data, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('ok'):
+                    logger.info(f"✅ Command response sent: {text[:50]}...")
+                    return True
+                else:
+                    logger.error(f"❌ Telegram API error: {result}")
+            else:
+                logger.error(f"❌ HTTP error: {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"❌ Error sending command response: {e}")
+        
+        return False
+
     def stop(self):
         """Stop monitoring"""
         self.running = False

@@ -426,6 +426,22 @@ def queries():
             'thread_id': thread_id
         })
 
+    # Sort by thread_id (None/empty first, then by ascending thread_id)
+    def sort_key(q):
+        thread_id = q['thread_id']
+        if thread_id is None or thread_id == '':
+            return (0, 0)  # No thread_id first
+        try:
+            return (1, int(thread_id))  # Then by thread_id number
+        except (ValueError, TypeError):
+            return (2, str(thread_id))  # Non-numeric thread_ids last
+
+    formatted_queries.sort(key=sort_key)
+    
+    # Re-assign sequential IDs after sorting
+    for i, query in enumerate(formatted_queries):
+        query['id'] = i + 1
+
     return render_template('queries.html', queries=formatted_queries)
 
 
@@ -530,6 +546,57 @@ def clear_all_items():
         logger.error("Failed to clear items from database via web interface")
     
     return redirect(url_for('index'))
+
+
+@app.route('/edit_query/<int:query_id>', methods=['POST'])
+def edit_query(query_id):
+    """Edit an existing query"""
+    try:
+        new_query = request.form.get('query', '').strip()
+        new_name = request.form.get('query_name', '').strip()
+        
+        if not new_query:
+            flash('Query URL is required', 'error')
+            return redirect(url_for('queries'))
+        
+        # Get existing query
+        queries = db.get_queries()
+        existing_query = None
+        for q in queries:
+            if q[0] == query_id:
+                existing_query = q
+                break
+                
+        if not existing_query:
+            flash('Query not found', 'error')
+            return redirect(url_for('queries'))
+        
+        # Update query in database
+        conn, db_type = db.get_db_connection()
+        cursor = conn.cursor()
+        
+        if db_type == 'postgresql':
+            cursor.execute("""
+                UPDATE queries 
+                SET query = %s, query_name = %s 
+                WHERE id = %s
+            """, (new_query, new_name if new_name else None, query_id))
+        else:
+            cursor.execute(
+                "UPDATE queries SET query = ?, query_name = ? WHERE id = ?",
+                (new_query, new_name if new_name else None, query_id))
+        
+        conn.commit()
+        conn.close()
+        
+        flash(f'Query "{new_name or new_query}" updated successfully', 'success')
+        logger.info(f"Query {query_id} updated: {new_query}")
+        
+    except Exception as e:
+        logger.error(f"Error editing query {query_id}: {e}")
+        flash(f'Error updating query: {e}', 'error')
+    
+    return redirect(url_for('queries'))
 
 
 @app.route('/remove_query/all', methods=['POST'])

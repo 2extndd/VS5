@@ -89,14 +89,41 @@
                         </tr>
                         </thead>
                         <tbody>
+                        {% set current_thread_id = none %}
                         {% for query in queries %}
-                        <tr>
+                        <!-- Thread group separator -->
+                        {% if query.thread_id != current_thread_id %}
+                            {% if not loop.first %}
+                                <tr class="table-active">
+                                    <td colspan="5" class="text-center border-top border-2">
+                                        <small class="text-muted">
+                                            <i class="bi bi-arrow-down"></i>
+                                            {% if query.thread_id %}
+                                                Thread ID: {{ query.thread_id }}
+                                            {% else %}
+                                                No Thread ID
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                            {% set current_thread_id = query.thread_id %}
+                        {% endif %}
+                        
+                        <tr {% if query.thread_id %}class="table-light"{% endif %}>
                             <td>{{ query.id }}</td>
-                            <td>{{ query.display }}</td>
                             <td>
+                                <a href="{{ query.query }}" target="_blank" class="text-decoration-none">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>{{ query.display }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if query.thread_id %}
+                                    <span class="badge bg-primary me-2">{{ query.thread_id }}</span>
+                                {% endif %}
                                 <form action="/update_thread_id" method="post" class="d-inline">
                                     <input type="hidden" name="query_id" value="{{ query.query }}">
-                                    <div class="input-group input-group-sm" style="max-width: 150px;">
+                                    <div class="input-group input-group-sm" style="max-width: 130px;">
                                         <input type="number" 
                                                class="form-control form-control-sm" 
                                                name="thread_id" 
@@ -115,6 +142,10 @@
                                        class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-box"></i> View Items
                                     </a>
+                                    <button type="button" class="btn btn-sm btn-outline-warning" 
+                                            data-bs-toggle="modal" data-bs-target="#editModal{{ query.id }}">
+                                        <i class="bi bi-pencil"></i> Edit Link
+                                    </button>
                                     <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
                                             data-bs-target="#deleteModal{{ query.id }}">
                                         <i class="bi bi-trash"></i> Remove
@@ -145,6 +176,51 @@
                                                     <button type="submit" class="btn btn-danger">Remove</button>
                                                 </form>
                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Edit Modal -->
+                                <div class="modal fade" id="editModal{{ query.id }}" tabindex="-1"
+                                     aria-labelledby="editModalLabel{{ query.id }}" aria-hidden="true">
+                                    <div class="modal-dialog modal-lg">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="editModalLabel{{ query.id }}">
+                                                    <i class="bi bi-pencil me-2"></i>Edit Query Link
+                                                </h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <form action="/edit_query/{{ query.id }}" method="post">
+                                                <div class="modal-body">
+                                                    <div class="mb-3">
+                                                        <label for="editQuery{{ query.id }}" class="form-label">Vinted URL:</label>
+                                                        <input type="url" 
+                                                               class="form-control" 
+                                                               id="editQuery{{ query.id }}" 
+                                                               name="query" 
+                                                               value="{{ query.query }}" 
+                                                               required
+                                                               pattern="^https?:\/\/(?:www\.)?vinted\.[a-z]{2,}(?:\.[a-z]{2,})*(\/.*)?$">
+                                                        <div class="form-text">Update the Vinted search URL</div>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label for="editName{{ query.id }}" class="form-label">Name (optional):</label>
+                                                        <input type="text" 
+                                                               class="form-control" 
+                                                               id="editName{{ query.id }}" 
+                                                               name="query_name" 
+                                                               value="{{ query.display if query.display != query.query else '' }}" 
+                                                               placeholder="Query name">
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <button type="submit" class="btn btn-warning">
+                                                        <i class="bi bi-check me-1"></i>Update Query
+                                                    </button>
+                                                </div>
+                                            </form>
                                         </div>
                                     </div>
                                 </div>
