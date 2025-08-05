@@ -257,14 +257,18 @@ def clear_item_queue(items_queue, new_items_queue):
         logger.info(f"[DEBUG] Found items in queue! Getting them...")
         data, query_id = items_queue.get()
         logger.info(f"[DEBUG] Got {len(data)} items from queue for query_id {query_id}")
+        logger.info(f"[DEBUG] Starting to process {len(data)} items...")
         for item in reversed(data):
+            logger.info(f"[DEBUG] Processing item {item.id}: {item.title[:50]}...")
 
             # If already in db, pass
             last_query_timestamp = db.get_last_timestamp(query_id)
             if last_query_timestamp is not None and last_query_timestamp >= item.raw_timestamp:
+                logger.info(f"[DEBUG] Item {item.id} skipped - already processed (timestamp check)")
                 pass
             # In case of multiple queries, we need to check if the item is already in the db
             elif db.is_item_in_db_by_id(item.id) is True:
+                logger.info(f"[DEBUG] Item {item.id} skipped - already in database")
                 # We update the timestamp
                 db.update_last_timestamp(query_id, item.raw_timestamp)
                 pass
@@ -272,6 +276,7 @@ def clear_item_queue(items_queue, new_items_queue):
             # If the user's country is not in the allowlist, we just update the timestamp
             elif db.get_allowlist() != 0 and (get_user_country(item.raw_data["user"]["id"])) not in (
                     db.get_allowlist() + ["XX"]):
+                logger.info(f"[DEBUG] Item {item.id} skipped - user country not in allowlist")
                 db.update_last_timestamp(query_id, item.raw_timestamp)
                 pass
             else:
