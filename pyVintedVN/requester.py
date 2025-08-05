@@ -38,6 +38,11 @@ class Requester:
             "User-Agent": random.choice(configuration_values.USER_AGENTS),
             **configuration_values.DEFAULT_HEADERS,
             "Host": "www.vinted.fr",
+            "Referer": "https://www.vinted.fr/",
+            "Origin": "https://www.vinted.fr",
+            "X-Requested-With": "XMLHttpRequest",
+            "DNT": "1",
+            "Upgrade-Insecure-Requests": "1"
         }
         self.VINTED_AUTH_URL = "https://www.vinted.fr/"
         self.MAX_RETRIES = 3
@@ -62,6 +67,11 @@ class Requester:
             "User-Agent": random.choice(configuration_values.USER_AGENTS),
             **configuration_values.DEFAULT_HEADERS,
             "Host": f"{locale}",
+            "Referer": f"https://{locale}/",
+            "Origin": f"https://{locale}",
+            "X-Requested-With": "XMLHttpRequest",
+            "DNT": "1",
+            "Upgrade-Insecure-Requests": "1"
         }
         self.session.headers.update(self.HEADER)
         if self.debug:
@@ -95,10 +105,17 @@ class Requester:
         while tried < self.MAX_RETRIES:
             tried += 1
             with self.session.get(url, params=params) as response:
+                if self.debug:
+                    logger.debug(f"Request to {url} returned status {response.status_code}")
+                    logger.debug(f"Response headers: {dict(response.headers)}")
+                    if response.text:
+                        logger.debug(f"Response text (first 500 chars): {response.text[:500]}")
+                
                 if response.status_code in (401, 404) and tried < self.MAX_RETRIES:
                     print(f"Cookies invalid, retrying {tried}/{self.MAX_RETRIES}")
                     if self.debug:
                         logger.debug(f"Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
+                        logger.debug(f"Current cookies: {dict(self.session.cookies)}")
                     self.set_cookies()
                 elif response.status_code == 200:
                     return response
