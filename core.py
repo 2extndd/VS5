@@ -265,6 +265,7 @@ def clear_item_queue(items_queue, new_items_queue):
             # Force all items to be processed for testing
             logger.info(f"[DEBUG] PROCESSING ITEM {item.id} (filters disabled for testing)")
             if True:  # Force all items to be processed
+                logger.info(f"[DEBUG] Creating message for item {item.id}...")
                 # We create the message
                 content = configuration_values.MESSAGE.format(
                     title=item.title,
