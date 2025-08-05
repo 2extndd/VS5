@@ -266,32 +266,41 @@ def clear_item_queue(items_queue, new_items_queue):
             logger.info(f"[DEBUG] PROCESSING ITEM {item.id} (filters disabled for testing)")
             if True:  # Force all items to be processed
                 logger.info(f"[DEBUG] Creating message for item {item.id}...")
-                # We create the message
-                content = configuration_values.MESSAGE.format(
-                    title=item.title,
-                    price=str(item.price) + " " + item.currency,
-                    brand=item.brand_title,
-                    image=None if item.photo is None else item.photo
-                )
-                # Get thread_id for this query
-                thread_id = None
                 try:
-                    # Get query details to extract thread_id
-                    current_query = next((q for q in db.get_queries() if q[0] == query_id), None)
-                    if current_query and len(current_query) > 4:
-                        thread_id = current_query[4]  # thread_id is the 5th element (index 4)
+                    # We create the message
+                    content = configuration_values.MESSAGE.format(
+                        title=item.title,
+                        price=str(item.price) + " " + item.currency,
+                        brand=item.brand_title,
+                        image=None if item.photo is None else item.photo
+                    )
+                    logger.info(f"[DEBUG] Message created successfully for item {item.id}")
+                    
+                    # Get thread_id for this query
+                    thread_id = None
+                    try:
+                        # Get query details to extract thread_id
+                        current_query = next((q for q in db.get_queries() if q[0] == query_id), None)
+                        if current_query and len(current_query) > 4:
+                            thread_id = current_query[4]  # thread_id is the 5th element (index 4)
+                    except Exception as e:
+                        logger.warning(f"Could not get thread_id for query {query_id}: {e}")
+                    
+                    # add the item to the queue with thread_id
+                    logger.info(f"[DEBUG] Adding item to queue: {item.title} (thread_id: {thread_id})")
+                    new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id))
+                    logger.info(f"[DEBUG] Item added to new_items_queue successfully")
+                    
+                    # Add the item to the db
+                    logger.info(f"[DEBUG] Adding item to database: {item.id}")
+                    db.add_item_to_db(id=item.id, timestamp=item.raw_timestamp, price=item.price, title=item.title,
+                                      photo_url=item.photo, query_id=query_id, currency=item.currency)
+                    logger.info(f"[DEBUG] Item {item.id} successfully added to database!")
+                    
                 except Exception as e:
-                    logger.warning(f"Could not get thread_id for query {query_id}: {e}")
-                
-                # add the item to the queue with thread_id
-                print(f"[DEBUG] Adding item to queue: {item.title} (thread_id: {thread_id})")
-                new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id))
-                # new_items_queue.put((content, item.url, "Open Vinted", item.buy_url, "Open buy page"))
-                # Add the item to the db
-                print(f"[DEBUG] Adding item to database: {item.id}")
-                db.add_item_to_db(id=item.id, timestamp=item.raw_timestamp, price=item.price, title=item.title,
-                                  photo_url=item.photo, query_id=query_id, currency=item.currency)
-                print(f"[DEBUG] Item successfully added to DB and queue")
+                    logger.error(f"[ERROR] Failed to process item {item.id}: {e}")
+                    import traceback
+                    logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
 
 
 def check_version():
