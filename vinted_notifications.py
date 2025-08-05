@@ -8,9 +8,6 @@ from web_ui_plugin.web_ui import web_ui_process
 logger = get_logger(__name__)
 
 # Global process references
-telegram_process = None
-rss_process = None
-scrape_process = None
 current_query_refresh_delay = None
 
 def scraper_process(items_queue):
@@ -86,12 +83,7 @@ def telegram_bot_process(queue):
 
 def check_refresh_delay(items_queue):
     """Check if the query refresh delay has changed and update the scheduler if needed"""
-    global scrape_process, current_query_refresh_delay
-
-    # Check if the scheduler is running
-
-    if scrape_process is None or not scrape_process.is_alive():
-        return
+    global current_query_refresh_delay
 
     # Get the current value from the database
     try:
@@ -105,61 +97,17 @@ def check_refresh_delay(items_queue):
             # Update the global variable
             current_query_refresh_delay = new_delay
 
-            # Remove the existing job and add a new one with the updated interval
-            scrape_process.terminate()
-            scrape_process.join()
-            scrape_process = multiprocessing.Process(target=scraper_process, args=(items_queue,))
-            scrape_process.start()
-
-            logger.info(f"Scheduler updated with new refresh delay of {new_delay} seconds")
+            logger.info(f"Query refresh delay updated to {new_delay} seconds")
     except Exception as e:
         logger.error(f"Error updating refresh delay: {e}", exc_info=True)
 
 
 def monitor_processes(items_queue, telegram_queue, rss_queue):
-    global telegram_process, rss_process
-
     # Check if the query refresh delay has changed
     check_refresh_delay(items_queue)
 
-    ### TELEGRAM ###
-    # Check telegram process status
-    telegram_should_run = db.get_parameter('telegram_process_running') == 'True'
-    # Check if the telegram token and chat ID are set
-    telegram_token = db.get_parameter('telegram_token')
-    telegram_chat_id = db.get_parameter('telegram_chat_id')
-    if not telegram_token or not telegram_chat_id:
-        telegram_should_run = False
-    telegram_is_running = telegram_process is not None and telegram_process.is_alive()
-
-    if telegram_should_run and not telegram_is_running:
-        # Start telegram process
-        logger.info("Starting telegram bot process.")
-        telegram_process = multiprocessing.Process(target=telegram_bot_process, args=(telegram_queue,))
-        telegram_process.start()
-    elif not telegram_should_run and telegram_is_running:
-        # Stop telegram process
-        logger.info("Stopping telegram bot process.")
-        telegram_process.terminate()
-        telegram_process.join()
-        telegram_process = None
-
-    ### RSS ###
-    # Check RSS process status
-    rss_should_run = db.get_parameter('rss_process_running') == 'True'
-    rss_is_running = rss_process is not None and rss_process.is_alive()
-
-    if rss_should_run and not rss_is_running:
-        # Start RSS process
-        logger.info("Starting RSS process based on database status")
-        rss_process = multiprocessing.Process(target=rss_feed_process, args=(rss_queue,))
-        rss_process.start()
-    elif not rss_should_run and rss_is_running:
-        # Stop RSS process
-        logger.info("Stopping RSS process based on database status")
-        rss_process.terminate()
-        rss_process.join()
-        rss_process = None
+    # Monitor processes are handled by the main scheduler now
+    pass
 
 
 def plugin_checker():
