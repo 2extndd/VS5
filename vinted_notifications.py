@@ -213,21 +213,35 @@ if __name__ == "__main__":
 
     # 3. Create the dispatcher process
     # This process will handle the new items and send them to the enabled services
+    logger.info("[DEBUG] Creating dispatcher process...")
     dispatcher_process = multiprocessing.Process(target=dispatcher_function,
                                                  args=(new_items_queue, rss_queue, telegram_queue,))
+    logger.info("[DEBUG] Starting dispatcher process...")
     dispatcher_process.start()
+    logger.info("[DEBUG] Dispatcher process started!")
 
-    # 4. Set up a scheduler to monitor processes
+    # 4. Create and start the Telegram bot process
+    # This process will handle telegram messages
+    logger.info("[DEBUG] Creating telegram bot process...")
+    telegram_bot_process_instance = multiprocessing.Process(target=telegram_bot_process, args=(telegram_queue,))
+    logger.info("[DEBUG] Starting telegram bot process...")
+    telegram_bot_process_instance.start()
+    logger.info("[DEBUG] Telegram bot process started!")
+
+    # 5. Set up a scheduler to monitor processes
     # This will check the process status in the database and start/stop processes as needed
     monitor_scheduler = BackgroundScheduler()
     monitor_scheduler.add_job(monitor_processes, 'interval', seconds=5, args=[items_queue, telegram_queue, rss_queue],
                               name="process_monitor")
     monitor_scheduler.start()
 
-    # 5. Create and start the Web UI process
+    # 6. Create and start the Web UI process
     # This process will provide a web interface to control the application
+    logger.info("[DEBUG] Creating web UI process...")
     web_ui_process_instance = multiprocessing.Process(target=web_ui_process)
+    logger.info("[DEBUG] Starting web UI process...")
     web_ui_process_instance.start()
+    logger.info("[DEBUG] Web UI process started!")
     
     # Port will be logged by the web UI process itself
     port = int(os.environ.get('PORT', configuration_values.WEB_UI_PORT))
@@ -239,6 +253,7 @@ if __name__ == "__main__":
         scraper_proc.join()
         item_extractor_process.join()
         dispatcher_process.join()
+        telegram_bot_process_instance.join()
         web_ui_process_instance.join()
 
     except KeyboardInterrupt:
@@ -252,6 +267,7 @@ if __name__ == "__main__":
         scraper_proc.terminate()
         item_extractor_process.terminate()
         dispatcher_process.terminate()
+        telegram_bot_process_instance.terminate()
         # Terminate web UI process
         web_ui_process_instance.terminate()
 
@@ -259,6 +275,7 @@ if __name__ == "__main__":
         scraper_proc.join()
         item_extractor_process.join()
         dispatcher_process.join()
+        telegram_bot_process_instance.join()
         web_ui_process_instance.join()
 
         logger.info("All processes terminated")
