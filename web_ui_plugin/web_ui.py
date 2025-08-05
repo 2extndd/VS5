@@ -327,7 +327,7 @@ def items():
                 'currency': str(item[3]) if item[3] else 'EUR',
                 'timestamp': timestamp_str,
                 'query': query_display,
-                'url': f'https://www.vinted.fr/items/{item[0]}',
+                'url': f'https://www.vinted.de/items/{item[0]}',
                 'photo_url': str(item[6]) if item[6] else ''
             })
         except Exception as e:
