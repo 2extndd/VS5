@@ -27,10 +27,7 @@ def get_db_connection():
     # Check if PostgreSQL is configured via environment variables
     if POSTGRES_AVAILABLE and os.getenv('DATABASE_URL'):
         try:
-            conn = psycopg2.connect(
-                os.getenv('DATABASE_URL'),
-                cursor_factory=RealDictCursor
-            )
+            conn = psycopg2.connect(os.getenv('DATABASE_URL'))
             return conn, 'postgresql'
         except Exception as e:
             print(f"Failed to connect to PostgreSQL: {e}")
