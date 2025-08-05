@@ -1533,6 +1533,131 @@ def telegram_commands():
         })
 
 
+@app.route('/test_proxies')
+def test_proxies():
+    """Test all proxies and system integration"""
+    import requests
+    import time
+    import concurrent.futures
+    from proxies import get_random_proxy, convert_proxy_string_to_dict, convert_webshare_to_standard
+    
+    results = {
+        "timestamp": time.time(),
+        "proxy_system_test": {},
+        "individual_tests": [],
+        "summary": {}
+    }
+    
+    try:
+        # Test 1: get_random_proxy() function
+        logger.info("Testing get_random_proxy() function...")
+        start_time = time.time()
+        random_proxy = get_random_proxy()
+        proxy_fetch_time = time.time() - start_time
+        
+        results["proxy_system_test"] = {
+            "proxy_returned": random_proxy is not None,
+            "proxy_value": random_proxy,
+            "fetch_time": proxy_fetch_time,
+            "status": "OK" if random_proxy else "NO_PROXY"
+        }
+        
+        # Test 2: Database proxy list
+        proxy_list = db.get_parameter("proxy_list")
+        if proxy_list:
+            # Try to parse as list first
+            try:
+                import ast
+                proxies = ast.literal_eval(proxy_list)
+                proxy_source = "database_list"
+            except:
+                # Try newline parsing
+                proxies_by_lines = [p.strip() for p in proxy_list.split('\n') if p.strip()]
+                if len(proxies_by_lines) > 1:
+                    proxies = proxies_by_lines
+                    proxy_source = "newline_format"
+                else:
+                    proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
+                    proxy_source = "semicolon_format"
+        else:
+            proxies = []
+            proxy_source = "empty"
+        
+        # Test 3: Individual proxy testing (first 5)
+        test_proxies = proxies[:5] if len(proxies) > 5 else proxies
+        
+        def test_single_proxy(proxy):
+            try:
+                # Check if WebShare format
+                parts = proxy.strip().split(':')
+                if len(parts) == 4 and not ('://' in proxy or '@' in proxy):
+                    # Convert WebShare to standard
+                    proxy = convert_webshare_to_standard(proxy)
+                    proxy_type = "webshare_converted"
+                else:
+                    proxy_type = "standard"
+                
+                proxy_dict = convert_proxy_string_to_dict(proxy)
+                ip = proxy.split('@')[1].split(':')[0] if '@' in proxy else proxy.split(':')[0]
+                
+                session = requests.Session()
+                session.headers.update({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+                
+                start_time = time.time()
+                response = session.get('https://httpbin.org/ip', proxies=proxy_dict, timeout=8)
+                test_time = time.time() - start_time
+                
+                return {
+                    "ip": ip,
+                    "proxy_type": proxy_type,
+                    "status": "OK",
+                    "response_time": test_time,
+                    "http_status": response.status_code,
+                    "returned_ip": response.json().get('origin', 'unknown') if response.status_code == 200 else None
+                }
+                
+            except Exception as e:
+                parts = proxy.strip().split(':')
+                ip = parts[0] if len(parts) >= 1 else 'unknown'
+                return {
+                    "ip": ip,
+                    "proxy_type": "unknown",
+                    "status": "ERROR",
+                    "error": str(e)[:100],
+                    "response_time": None
+                }
+        
+        logger.info(f"Testing {len(test_proxies)} individual proxies...")
+        if test_proxies:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                future_to_proxy = {executor.submit(test_single_proxy, proxy): proxy for proxy in test_proxies}
+                
+                for future in concurrent.futures.as_completed(future_to_proxy):
+                    result = future.result()
+                    results["individual_tests"].append(result)
+        
+        # Summary
+        working_count = len([t for t in results["individual_tests"] if t["status"] == "OK"])
+        total_tested = len(results["individual_tests"])
+        
+        results["summary"] = {
+            "total_proxies_in_db": len(proxies),
+            "proxy_source": proxy_source,
+            "proxies_tested": total_tested,
+            "working_proxies": working_count,
+            "success_rate": f"{(working_count/total_tested*100):.1f}%" if total_tested > 0 else "0%",
+            "system_status": "OK" if random_proxy and working_count > 0 else "ISSUES"
+        }
+        
+    except Exception as e:
+        results["error"] = str(e)
+        results["summary"] = {"system_status": "ERROR"}
+    
+    return jsonify(results)
+
+
 @app.route('/debug_last_timestamp')
 def debug_last_timestamp():
     """Debug get_last_timestamp for all queries"""
