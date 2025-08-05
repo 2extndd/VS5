@@ -69,11 +69,11 @@ def get_formatted_query_list():
         # Get the name or Extract the value of 'search_text'
         query_name = query[3] if query[3] is not None else query_params.get('search_text', [None])[0]
 
-        if query_name[0] is None:
+        if query_name is None:
             # Use query text instead of the whole query object
             queries_keywords.append([query[1]])
         else:
-            queries_keywords.append(query_name)
+            queries_keywords.append([query_name])
 
     query_list = ("\n").join([str(i + 1) + ". " + j[0] for i, j in enumerate(queries_keywords)])
     return query_list

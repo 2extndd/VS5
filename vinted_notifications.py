@@ -48,7 +48,11 @@ def item_extractor(items_queue, new_items_queue):
                 logger.info(f"[DEBUG] Item extractor loop count: {loop_count}")
             time.sleep(0.1)  # Small sleep to prevent high CPU usage
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Consumer process stopped")
+        logger.info("Item extractor process stopped")
+    except Exception as e:
+        logger.error(f"Critical error in item extractor process: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 
 def dispatcher_function(input_queue, rss_queue, telegram_queue):

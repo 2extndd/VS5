@@ -91,10 +91,10 @@ def get_random_proxy() -> Optional[str]:
     """
     global _PROXY_CACHE, _PROXY_CACHE_INITIALIZED, _SINGLE_PROXY
     
-    print(f"[DEBUG] get_random_proxy() called")
-    print(f"[DEBUG] _PROXY_CACHE_INITIALIZED: {_PROXY_CACHE_INITIALIZED}")
-    print(f"[DEBUG] _PROXY_CACHE: {_PROXY_CACHE}")
-    print(f"[DEBUG] _SINGLE_PROXY: {_SINGLE_PROXY}")
+    logger.info(f"[DEBUG] get_random_proxy() called")
+    logger.info(f"[DEBUG] _PROXY_CACHE_INITIALIZED: {_PROXY_CACHE_INITIALIZED}")
+    logger.info(f"[DEBUG] _PROXY_CACHE: {_PROXY_CACHE}")
+    logger.info(f"[DEBUG] _SINGLE_PROXY: {_SINGLE_PROXY}")
 
     # Import db here to avoid circular imports
     import db
@@ -138,11 +138,11 @@ def get_random_proxy() -> Optional[str]:
 
     # Check if PROXY_LIST is configured in the database
     proxy_list = db.get_parameter("proxy_list")
-    print(f"[DEBUG] proxy_list from DB: {proxy_list}")
+    logger.info(f"[DEBUG] proxy_list from DB: {proxy_list}")
     if proxy_list:
         # If PROXY_LIST is a string with multiple proxies separated by semicolons
         all_proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
-        print(f"[DEBUG] Parsed {len(all_proxies)} proxies from proxy_list")
+        logger.info(f"[DEBUG] Parsed {len(all_proxies)} proxies from proxy_list")
 
     # Check if PROXY_LIST_LINK is configured in the database
     proxy_list_link = db.get_parameter("proxy_list_link")
@@ -154,35 +154,35 @@ def get_random_proxy() -> Optional[str]:
     # Check proxies in parallel if we have any and CHECK_PROXIES is True
     if all_proxies:
         check_proxies = db.get_parameter("check_proxies") == "True"
-        print(f"[DEBUG] check_proxies setting: {check_proxies}")
+        logger.info(f"[DEBUG] check_proxies setting: {check_proxies}")
         if check_proxies:
             working_proxies = check_proxies_parallel(all_proxies)
-            print(f"[DEBUG] Found {len(working_proxies)} working proxies out of {len(all_proxies)}")
+            logger.info(f"[DEBUG] Found {len(working_proxies)} working proxies out of {len(all_proxies)}")
             if working_proxies:
                 _PROXY_CACHE = working_proxies
                 # If there's only one working proxy, cache it separately
                 if len(working_proxies) == 1:
                     _SINGLE_PROXY = working_proxies[0]
-                    print(f"[DEBUG] Using single proxy: {_SINGLE_PROXY}")
+                    logger.info(f"[DEBUG] Using single proxy: {_SINGLE_PROXY}")
                     return _SINGLE_PROXY
                 selected_proxy = random.choice(working_proxies)
-                print(f"[DEBUG] Selected random proxy: {selected_proxy}")
+                logger.info(f"[DEBUG] Selected random proxy: {selected_proxy}")
                 return selected_proxy
         else:
             # If CHECK_PROXIES is False, just cache all proxies without checking them
-            print(f"[DEBUG] Using all {len(all_proxies)} proxies without checking")
+            logger.info(f"[DEBUG] Using all {len(all_proxies)} proxies without checking")
             _PROXY_CACHE = all_proxies
             # If there's only one proxy, cache it separately
             if len(all_proxies) == 1:
                 _SINGLE_PROXY = all_proxies[0]
-                print(f"[DEBUG] Using single unchecked proxy: {_SINGLE_PROXY}")
+                logger.info(f"[DEBUG] Using single unchecked proxy: {_SINGLE_PROXY}")
                 return _SINGLE_PROXY
             selected_proxy = random.choice(all_proxies)
-            print(f"[DEBUG] Selected random unchecked proxy: {selected_proxy}")
+            logger.info(f"[DEBUG] Selected random unchecked proxy: {selected_proxy}")
             return selected_proxy
 
     # No working proxies found
-    print(f"[DEBUG] No proxies found or no working proxies")
+    logger.info(f"[DEBUG] No proxies found or no working proxies")
     _PROXY_CACHE = None
     return None
 
@@ -224,6 +224,10 @@ def check_proxy(proxy: str) -> bool:
         return response.status_code == 200
     except (RequestException, ConnectionError, TimeoutError) as e:
         # Any exception means the proxy is not working
+        return False
+    except Exception as e:
+        # Catch any other exceptions to prevent process crashes
+        logger.debug(f"Error checking proxy {proxy}: {e}")
         return False
     finally:
         # Ensure the session is closed to prevent resource leaks

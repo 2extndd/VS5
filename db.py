@@ -30,8 +30,10 @@ def get_db_connection():
             conn = psycopg2.connect(os.getenv('DATABASE_URL'))
             return conn, 'postgresql'
         except Exception as e:
-            print(f"Failed to connect to PostgreSQL: {e}")
-            print("Falling back to SQLite")
+            from logger import get_logger
+            logger = get_logger(__name__)
+            logger.warning(f"Failed to connect to PostgreSQL: {e}")
+            logger.info("Falling back to SQLite")
     
     # Default to SQLite
     conn = sqlite3.connect("vinted_notifications.db")
@@ -50,39 +52,41 @@ def create_or_update_db(db_path):
         with open(db_path, "r") as sql_file:
             sql_script = sql_file.read()
             
-        print(f"Database type: {db_type}")
-        print(f"Executing database creation script: {db_path}")
+        from logger import get_logger
+        logger = get_logger(__name__)
+        logger.info(f"Database type: {db_type}")
+        logger.info(f"Executing database creation script: {db_path}")
             
         if db_type == 'postgresql':
             # Convert SQLite-specific syntax to PostgreSQL
             statements = convert_sqlite_to_postgres(sql_script)
-            print("Converted SQL statements for PostgreSQL:")
+            logger.info("Converted SQL statements for PostgreSQL:")
             for i, stmt in enumerate(statements[:3]):  # Print first 3 statements
-                print(f"Statement {i+1}: {stmt[:100]}...")
+                logger.info(f"Statement {i+1}: {stmt[:100]}...")
             
             # Execute statements one by one for PostgreSQL
             for i, statement in enumerate(statements):
                 if statement and not statement.startswith('--'):
                     try:
-                        print(f"Executing statement {i+1}/{len(statements)}: {statement[:100]}...")
+                        logger.info(f"Executing statement {i+1}/{len(statements)}: {statement[:100]}...")
                         cursor.execute(statement)
                         conn.commit()  # Commit after each statement for PostgreSQL
-                        print(f"Statement {i+1} executed successfully")
+                        logger.info(f"Statement {i+1} executed successfully")
                     except Exception as e:
-                        print(f"Error executing statement {i+1}: {e}")
-                        print(f"Statement was: {statement}")
+                        logger.error(f"Error executing statement {i+1}: {e}")
+                        logger.error(f"Statement was: {statement}")
                         # Continue with next statement instead of raising
-                        print(f"Continuing with next statement...")
+                        logger.info(f"Continuing with next statement...")
                         conn.rollback()  # Rollback failed transaction
         else:
             # SQLite can use executescript
             cursor.executescript(sql_script)
             conn.commit()
 
-        print("Database creation/update completed successfully")
+        logger.info("Database creation/update completed successfully")
     except Exception as e:
-        print(f"Error in create_or_update_db: {e}")
-        print_exc()
+        logger.error(f"Error in create_or_update_db: {e}")
+        logger.error("Full traceback:", exc_info=True)
         if conn:
             conn.rollback()
         raise

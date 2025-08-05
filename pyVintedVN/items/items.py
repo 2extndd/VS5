@@ -4,6 +4,15 @@ from urllib.parse import urlparse, parse_qsl
 from requests.exceptions import HTTPError
 from typing import List, Dict, Optional
 from pyVintedVN.settings import Urls
+import sys
+import os
+
+# Add the parent directory to sys.path to import logger
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from logger import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 
 class Items:
@@ -56,26 +65,26 @@ class Items:
             response_data = response.json()
             
             # Debug logs
-            print(f"[DEBUG] Items API response status: {response.status_code}")
-            print(f"[DEBUG] API URL: {api_url}")
-            print(f"[DEBUG] API params: {params}")
-            print(f"[DEBUG] Response JSON keys: {list(response_data.keys()) if response_data else 'None'}")
+            logger.info(f"[DEBUG] Items API response status: {response.status_code}")
+            logger.info(f"[DEBUG] API URL: {api_url}")
+            logger.info(f"[DEBUG] API params: {params}")
+            logger.info(f"[DEBUG] Response JSON keys: {list(response_data.keys()) if response_data else 'None'}")
             if 'items' in response_data:
-                print(f"[DEBUG] Number of items in API response: {len(response_data['items'])}")
+                logger.info(f"[DEBUG] Number of items in API response: {len(response_data['items'])}")
                 if response_data['items']:
                     first_item = response_data['items'][0]
-                    print(f"[DEBUG] First item ID: {first_item.get('id', 'Unknown')}")
-                    print(f"[DEBUG] First item title: {first_item.get('title', 'Unknown')}")
+                    logger.info(f"[DEBUG] First item ID: {first_item.get('id', 'Unknown')}")
+                    logger.info(f"[DEBUG] First item title: {first_item.get('title', 'Unknown')}")
             else:
-                print(f"[DEBUG] No 'items' key in API response")
-                print(f"[DEBUG] Full API response: {response_data}")
+                logger.info(f"[DEBUG] No 'items' key in API response")
+                logger.info(f"[DEBUG] Full API response: {response_data}")
             
             items = response_data["items"]
 
             # Return either Item objects or raw JSON data
             if not json:
                 item_objects = [Item(_item) for _item in items]
-                print(f"[DEBUG] Created {len(item_objects)} Item objects from API response")
+                logger.info(f"[DEBUG] Created {len(item_objects)} Item objects from API response")
                 return item_objects
             else:
                 return items
