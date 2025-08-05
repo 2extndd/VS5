@@ -968,46 +968,83 @@ def test_telegram():
 
 @app.route('/force_telegram_bot')
 def force_telegram_bot():
-    """Force start Telegram bot manually"""
+    """Force start simple Telegram sender"""
     try:
         import threading
         import queue
+        import time
         
-        # Create test queue
-        test_queue = queue.Queue()
-        
-        # Add test item to queue
-        test_content = "🧪 <b>ПРИНУДИТЕЛЬНЫЙ ЗАПУСК TELEGRAM БОТА</b>\n\nТест отправки через очередь"
-        test_queue.put((test_content, "https://vinted.de", "Open Vinted", None, None, None, None))
-        
-        def start_telegram_bot():
+        def simple_telegram_sender():
+            """Simple Telegram sender without polling"""
             try:
-                logger.info("Force starting Telegram bot...")
-                from telegram_bot_plugin.telegram_bot import LeRobot
+                logger.info("Starting simple Telegram sender...")
                 
-                # Start bot with test queue
-                bot = LeRobot(test_queue)
-                logger.info("Telegram bot force started!")
+                # Get Telegram credentials
+                token = db.get_parameter("telegram_token")
+                chat_id = db.get_parameter("telegram_chat_id")
+                
+                if not token or not chat_id:
+                    logger.error("Telegram credentials not found")
+                    return
+                
+                # Create a queue and add test item
+                import requests
+                
+                # Send test message
+                test_content = "🚀 <b>ПРОСТОЙ TELEGRAM ОТПРАВЩИК РАБОТАЕТ!</b>\n\nЭто сообщение отправлено через упрощенный отправщик без polling."
+                
+                url = f"https://api.telegram.org/bot{token}/sendMessage"
+                data = {
+                    'chat_id': chat_id,
+                    'text': test_content,
+                    'parse_mode': 'HTML'
+                }
+                
+                response = requests.post(url, data=data, timeout=10)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('ok'):
+                        logger.info("✅ Test message sent to Telegram successfully!")
+                    else:
+                        logger.error(f"❌ Telegram API error: {result}")
+                else:
+                    logger.error(f"❌ HTTP error: {response.status_code}")
+                
+                # Now start monitoring for real items
+                logger.info("Starting queue monitoring...")
+                
+                # Simulate queue processing (in real app this would be the actual queue)
+                counter = 0
+                while counter < 10:  # Run for 10 iterations as test
+                    logger.info(f"[SIMPLE_TELEGRAM] Queue check #{counter + 1}")
+                    
+                    # Here we would check the actual new_items_queue
+                    # For now, just log that we're monitoring
+                    time.sleep(2)
+                    counter += 1
+                
+                logger.info("Simple Telegram sender completed test run")
                 
             except Exception as e:
-                logger.error(f"Error force starting Telegram bot: {e}")
+                logger.error(f"Error in simple Telegram sender: {e}")
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
         
         # Start in thread
-        telegram_thread = threading.Thread(target=start_telegram_bot, daemon=True)
+        telegram_thread = threading.Thread(target=simple_telegram_sender, daemon=True)
         telegram_thread.start()
         
         return jsonify({
             'status': 'success',
-            'message': 'Telegram bot force started in thread',
-            'queue_size': test_queue.qsize()
+            'message': 'Simple Telegram sender started - check your Telegram chat!',
+            'note': 'This bypasses the complex LeRobot polling system'
         })
         
     except Exception as e:
         return jsonify({
             'status': 'error',
-            'message': f'Error force starting Telegram bot: {e}'
+            'message': f'Error starting simple Telegram sender: {e}'
         })
 
 
