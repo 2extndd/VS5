@@ -226,4 +226,6 @@ class requester:
         return response# Force cache refresh
 
 # Singleton instance of the requester class for backward compatibility
-requester = requester()
+requester_instance = requester()
+# Backward compatibility alias
+requester = requester_instance
