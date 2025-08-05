@@ -167,24 +167,45 @@ def plugin_checker():
 
 if __name__ == "__main__":
     # Starting sequence
-    # Db check
-    if not os.path.exists("./vinted_notifications.db"):
-        db.create_or_update_sqlite_db("initial_db.sql")
+    # Db check - works with both SQLite and PostgreSQL
+    conn, db_type = db.get_db_connection()
+    conn.close()
+    
+    logger.info(f"Using database type: {db_type}")
+    
+    # For PostgreSQL, we always need to ensure tables exist
+    # For SQLite, check if file exists
+    needs_initialization = False
+    if db_type == 'postgresql':
+        needs_initialization = True  # Always try to create tables for PostgreSQL
+    else:
+        needs_initialization = not os.path.exists("./vinted_notifications.db")
+    
+    if needs_initialization:
+        logger.info("Initializing database...")
+        db.create_or_update_db("initial_db.sql")
         logger.info("Database created successfully")
     else:
+        # Run migrations for existing database
         current_version = db.get_parameter('version')
-        # Check if there is a file that starts with the current version in the migrations folder. We keep comparing until
-        # we find no migration files that start with the current version.
-        migration_files = [f for f in os.listdir('migrations')]
-        while True:
-            migration_file = next((f for f in migration_files if f.startswith(current_version)), None)
-            if migration_file:
-                logger.info(f"Running migration: {migration_file}")
-                db.create_or_update_sqlite_db("./migrations/" + migration_file)
-                # Increment the version
-                current_version = db.get_parameter('version')
-            else:
-                break
+        if current_version:
+            # Check if there is a file that starts with the current version in the migrations folder. We keep comparing until
+            # we find no migration files that start with the current version.
+            migration_files = [f for f in os.listdir('migrations')]
+            while True:
+                migration_file = next((f for f in migration_files if f.startswith(current_version)), None)
+                if migration_file:
+                    logger.info(f"Running migration: {migration_file}")
+                    db.create_or_update_db("./migrations/" + migration_file)
+                    # Increment the version
+                    current_version = db.get_parameter('version')
+                else:
+                    break
+        else:
+            # No version found, database might be empty - try to initialize
+            logger.info("No version parameter found, initializing database...")
+            db.create_or_update_db("initial_db.sql")
+            logger.info("Database initialized successfully")
 
     # Plugin checker
     plugin_checker()

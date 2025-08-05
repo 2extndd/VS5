@@ -208,7 +208,8 @@ def process_items(queue):
     vinted = Vinted()
 
     # Get the number of items per query from the database
-    items_per_query = int(db.get_parameter("items_per_query"))
+    items_per_query_param = db.get_parameter("items_per_query")
+    items_per_query = int(items_per_query_param) if items_per_query_param else 20
 
     # for each keyword we parse data
     for query in all_queries:

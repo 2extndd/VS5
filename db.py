@@ -47,27 +47,30 @@ def create_or_update_db(db_path):
             
         if db_type == 'postgresql':
             # Convert SQLite-specific syntax to PostgreSQL
-            sql_script = convert_sqlite_to_postgres(sql_script)
-            print("Converted SQL script for PostgreSQL:")
-            print(sql_script[:500] + "..." if len(sql_script) > 500 else sql_script)
+            statements = convert_sqlite_to_postgres(sql_script)
+            print("Converted SQL statements for PostgreSQL:")
+            for i, stmt in enumerate(statements[:3]):  # Print first 3 statements
+                print(f"Statement {i+1}: {stmt[:100]}...")
             
             # Execute statements one by one for PostgreSQL
-            statements = [s.strip() for s in sql_script.split(';') if s.strip()]
             for i, statement in enumerate(statements):
                 if statement and not statement.startswith('--'):
                     try:
                         print(f"Executing statement {i+1}/{len(statements)}: {statement[:100]}...")
                         cursor.execute(statement)
+                        conn.commit()  # Commit after each statement for PostgreSQL
                         print(f"Statement {i+1} executed successfully")
                     except Exception as e:
                         print(f"Error executing statement {i+1}: {e}")
                         print(f"Statement was: {statement}")
-                        raise
+                        # Continue with next statement instead of raising
+                        print(f"Continuing with next statement...")
+                        conn.rollback()  # Rollback failed transaction
         else:
             # SQLite can use executescript
             cursor.executescript(sql_script)
+            conn.commit()
 
-        conn.commit()
         print("Database creation/update completed successfully")
     except Exception as e:
         print(f"Error in create_or_update_db: {e}")
@@ -94,14 +97,27 @@ def convert_sqlite_to_postgres(sql_script):
     # Convert INSERT OR IGNORE to INSERT with ON CONFLICT
     sql_script = sql_script.replace('INSERT OR IGNORE INTO', 'INSERT INTO')
     
-    # Split statements by semicolon and clean up
+    # Split by semicolon while preserving multi-line statements
+    lines = sql_script.split('\n')
     statements = []
-    for statement in sql_script.split(';'):
-        statement = statement.strip()
-        if statement and not statement.startswith('--') and statement != '':
-            # Skip empty statements and comments
-            if len(statement) > 3:  # Minimum meaningful statement length
-                statements.append(statement)
+    current_statement = ""
+    
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith('--'):
+            current_statement += line + " "
+            if line.endswith(';'):
+                # End of statement
+                statement = current_statement.strip().rstrip(';')
+                if statement and len(statement) > 3:
+                    statements.append(statement)
+                current_statement = ""
+    
+    # Add any remaining statement
+    if current_statement.strip():
+        statement = current_statement.strip().rstrip(';')
+        if statement and len(statement) > 3:
+            statements.append(statement)
     
     # Process each statement for PostgreSQL compatibility
     processed_statements = []
@@ -115,7 +131,7 @@ def convert_sqlite_to_postgres(sql_script):
         
         processed_statements.append(statement)
     
-    return ';\n'.join(processed_statements) + ';'
+    return processed_statements  # Return as list, not joined string
 
 
 # Legacy function name for compatibility
