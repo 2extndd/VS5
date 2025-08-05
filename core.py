@@ -240,8 +240,8 @@ def process_items(queue):
             else:
                 logger.info(f"[DEBUG] *** NO ITEMS RETURNED FROM SEARCH ***")
             
-            # Filter items to only include new ones (within last 24 hours)
-            data = [item for item in all_items if item.is_new_item(1440)]  # 1440 minutes = 24 hours
+            # TEMPORARILY DISABLE TIME FILTER - accept all items but check for duplicates
+            data = all_items  # Accept all items for now
             logger.info(f"[DEBUG] Putting {len(data)} items into queue for query_id {query[0]} (queue id: {id(queue)})")
             queue.put((data, query[0]))
             logger.info(f"[DEBUG] Successfully put items into queue (queue id: {id(queue)})")
@@ -272,8 +272,8 @@ def clear_item_queue(items_queue, new_items_queue):
                 logger.info(f"[DEBUG] Item {item.id} already exists in database, skipping...")
                 continue
                 
-            # Check if item is new (within last 24 hours)
-            if item.is_new_item(1440):  # 1440 minutes = 24 hours
+            # TEMPORARILY DISABLE TIME FILTER - accept all items but check for duplicates
+            if True:  # Accept all items for now
                 logger.info(f"[DEBUG] Creating message for item {item.id}...")
                 try:
                     # We create the message
