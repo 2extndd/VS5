@@ -585,6 +585,18 @@ def items():
             except:
                 query_display = str(item[5]) if item[5] else 'Unknown query'
             
+            # Check if item is recent (last 24 hours)
+            is_recent = False
+            try:
+                if item[4]:
+                    timestamp_val = float(item[4])
+                    import time
+                    current_time = time.time()
+                    hours_ago = (current_time - timestamp_val) / 3600
+                    is_recent = hours_ago < 24
+            except:
+                is_recent = False
+            
             formatted_items.append({
                 'title': str(item[1]) if item[1] else 'Unknown title',
                 'price': float(item[2]) if item[2] is not None else 0.0,
@@ -592,7 +604,8 @@ def items():
                 'timestamp': timestamp_str,
                 'query': query_display,
                 'url': f'https://www.vinted.de/items/{item[0]}',
-                'photo_url': str(item[6]) if item[6] else ''
+                'photo_url': str(item[6]) if item[6] else '',
+                'is_recent': is_recent
             })
         except Exception as e:
             # Log the error and skip this item
