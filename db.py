@@ -41,6 +41,59 @@ def get_db_connection():
     return conn, 'sqlite'
 
 
+def apply_migration(migration_path):
+    """Apply a database migration"""
+    conn = None
+    try:
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
+        
+        from logger import get_logger
+        logger = get_logger(__name__)
+        
+        if not os.path.exists(migration_path):
+            logger.warning(f"Migration file not found: {migration_path}")
+            return False
+            
+        with open(migration_path, "r") as sql_file:
+            migration_script = sql_file.read()
+            
+        logger.info(f"Applying migration: {migration_path}")
+        
+        if db_type == 'postgresql':
+            # Split into individual statements
+            statements = [stmt.strip() for stmt in migration_script.split(';') if stmt.strip() and not stmt.strip().startswith('--')]
+            
+            for i, statement in enumerate(statements):
+                try:
+                    logger.info(f"Executing migration statement {i+1}: {statement[:100]}...")
+                    cursor.execute(statement)
+                    conn.commit()
+                    logger.info(f"Migration statement {i+1} executed successfully")
+                except Exception as e:
+                    logger.error(f"Error executing migration statement {i+1}: {e}")
+                    logger.error(f"Statement was: {statement}")
+                    conn.rollback()
+                    return False
+        else:
+            # For SQLite, execute the entire script
+            cursor.executescript(migration_script)
+            
+        logger.info(f"Migration {migration_path} applied successfully")
+        return True
+        
+    except Exception as e:
+        from logger import get_logger
+        logger = get_logger(__name__)
+        logger.error(f"Failed to apply migration {migration_path}: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
 def create_or_update_db(db_path):
     """Create or update database from SQL file (works with both SQLite and PostgreSQL)"""
     conn = None
@@ -78,6 +131,10 @@ def create_or_update_db(db_path):
                         # Continue with next statement instead of raising
                         logger.info(f"Continuing with next statement...")
                         conn.rollback()  # Rollback failed transaction
+                        
+            # Apply critical migrations after schema creation
+            logger.info("Applying price type migration for PostgreSQL...")
+            apply_migration("migrations/fix_price_type.sql")
         else:
             # SQLite can use executescript
             cursor.executescript(sql_script)
@@ -104,7 +161,7 @@ def convert_sqlite_to_postgres(sql_script):
     sql_script = sql_script.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
     
     # Convert NUMERIC to appropriate PostgreSQL types
-    sql_script = sql_script.replace('NUMERIC', 'BIGINT')
+    sql_script = sql_script.replace('NUMERIC', 'DECIMAL')
     
     # Convert INSERT OR IGNORE to INSERT with ON CONFLICT
     sql_script = sql_script.replace('INSERT OR IGNORE INTO', 'INSERT INTO')
@@ -225,23 +282,30 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
         
         logger.info(f"Attempting to add item {id} to database (query_id: {query_id})")
         
+        # Convert price to float for DECIMAL compatibility
+        try:
+            price_decimal = float(price) if price is not None else 0.0
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid price '{price}' for item {id}, using 0.0")
+            price_decimal = 0.0
+        
         if db_type == 'postgresql':
             # Insert into db the id and the query_id related to the item
             cursor.execute(
                 "INSERT INTO items (item, title, price, currency, timestamp, photo_url, query_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (id, title, price, currency, timestamp, photo_url, query_id))
+                (id, title, price_decimal, currency, timestamp, photo_url, query_id))
             # Update the last item for the query
             cursor.execute("UPDATE queries SET last_item=%s WHERE id=%s", (timestamp, query_id))
         else:
             # Insert into db the id and the query_id related to the item
             cursor.execute(
                 "INSERT INTO items (item, title, price, currency, timestamp, photo_url, query_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (id, title, price, currency, timestamp, photo_url, query_id))
+                (id, title, price_decimal, currency, timestamp, photo_url, query_id))
             # Update the last item for the query
             cursor.execute("UPDATE queries SET last_item=? WHERE id=?", (timestamp, query_id))
             
         conn.commit()
-        logger.info(f"Successfully added item {id} to database")
+        logger.info(f"Successfully added item {id} to database with price {price_decimal}")
     except Exception as e:
         logger.error(f"Error adding item {id} to database: {e}")
         logger.error("Full traceback:", exc_info=True)
