@@ -46,6 +46,8 @@ class LeRobot:
             self.app.add_handler(CommandHandler("add_country", self.add_country))
             self.app.add_handler(CommandHandler("remove_country", self.remove_country))
             self.app.add_handler(CommandHandler("allowlist", self.allowlist))
+            # Thread ID handler
+            self.app.add_handler(CommandHandler("thread_id", self.get_thread_id))
 
             # TODO : Help command
 
@@ -255,6 +257,67 @@ class LeRobot:
             except:
                 pass
 
+    ### THREAD ID ###
+
+    async def get_thread_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Get the thread_id of the current forum topic/message thread"""
+        try:
+            message = update.message
+            
+            # Check if the message has a thread_id
+            if hasattr(message, 'message_thread_id') and message.message_thread_id:
+                thread_id = message.message_thread_id
+                
+                # Check if it's a forum topic
+                if hasattr(message, 'is_topic_message') and message.is_topic_message:
+                    await message.reply_text(
+                        f"🧵 <b>Thread ID (Forum Topic):</b> <code>{thread_id}</code>\n\n"
+                        f"📍 <i>This message is part of a forum topic.</i>\n"
+                        f"💡 <i>Use this ID to send messages to this specific topic.</i>",
+                        parse_mode="HTML"
+                    )
+                else:
+                    await message.reply_text(
+                        f"🧵 <b>Thread ID:</b> <code>{thread_id}</code>\n\n"
+                        f"📍 <i>This message is part of a thread.</i>\n"
+                        f"💡 <i>Use this ID to send messages to this specific thread.</i>",
+                        parse_mode="HTML"
+                    )
+            else:
+                # Check if it's a regular group/supergroup message
+                chat_type = message.chat.type
+                if chat_type in ['group', 'supergroup']:
+                    await message.reply_text(
+                        f"ℹ️ <b>No Thread ID</b>\n\n"
+                        f"📍 <i>This message is in the main chat (not in a forum topic or message thread).</i>\n"
+                        f"💡 <i>Chat type: {chat_type}</i>",
+                        parse_mode="HTML"
+                    )
+                elif chat_type == 'private':
+                    await message.reply_text(
+                        f"ℹ️ <b>Private Chat</b>\n\n"
+                        f"📍 <i>Thread IDs are only available in groups, supergroups, and forum topics.</i>",
+                        parse_mode="HTML"
+                    )
+                else:
+                    await message.reply_text(
+                        f"ℹ️ <b>No Thread ID</b>\n\n"
+                        f"📍 <i>Chat type: {chat_type}</i>\n"
+                        f"💡 <i>Thread IDs are available in forum topics and message threads.</i>",
+                        parse_mode="HTML"
+                    )
+                    
+        except Exception as e:
+            logger.error(f"Error getting thread ID: {str(e)}", exc_info=True)
+            try:
+                await update.message.reply_text(
+                    f"❌ <b>Error</b>\n\n"
+                    f"<i>An error occurred while getting thread ID. Please try again later.</i>",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
+
     ### TELEGRAM SPECIFIC FUNCTIONS ###
 
     async def send_new_post(self, content, url, text, buy_url=None, buy_text=None, thread_id=None, photo_url=None):
@@ -395,7 +458,8 @@ class LeRobot:
                 ("clear_allowlist", "Clear the allowlist"),
                 ("add_country", "Add a country to the allowlist"),
                 ("remove_country", "Remove a country from the allowlist"),
-                ("allowlist", "List all countries in the allowlist")
+                ("allowlist", "List all countries in the allowlist"),
+                ("thread_id", "Get thread ID of current forum topic")
             ])
             logger.info("Bot commands set successfully")
         except Exception as e:
