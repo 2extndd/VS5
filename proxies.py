@@ -133,9 +133,11 @@ def get_random_proxy() -> Optional[str]:
 
     # Check if PROXY_LIST is configured in the database
     proxy_list = db.get_parameter("proxy_list")
+    print(f"[DEBUG] proxy_list from DB: {proxy_list}")
     if proxy_list:
         # If PROXY_LIST is a string with multiple proxies separated by semicolons
         all_proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
+        print(f"[DEBUG] Parsed {len(all_proxies)} proxies from proxy_list")
 
     # Check if PROXY_LIST_LINK is configured in the database
     proxy_list_link = db.get_parameter("proxy_list_link")
@@ -147,25 +149,35 @@ def get_random_proxy() -> Optional[str]:
     # Check proxies in parallel if we have any and CHECK_PROXIES is True
     if all_proxies:
         check_proxies = db.get_parameter("check_proxies") == "True"
+        print(f"[DEBUG] check_proxies setting: {check_proxies}")
         if check_proxies:
             working_proxies = check_proxies_parallel(all_proxies)
+            print(f"[DEBUG] Found {len(working_proxies)} working proxies out of {len(all_proxies)}")
             if working_proxies:
                 _PROXY_CACHE = working_proxies
                 # If there's only one working proxy, cache it separately
                 if len(working_proxies) == 1:
                     _SINGLE_PROXY = working_proxies[0]
+                    print(f"[DEBUG] Using single proxy: {_SINGLE_PROXY}")
                     return _SINGLE_PROXY
-                return random.choice(working_proxies)
+                selected_proxy = random.choice(working_proxies)
+                print(f"[DEBUG] Selected random proxy: {selected_proxy}")
+                return selected_proxy
         else:
             # If CHECK_PROXIES is False, just cache all proxies without checking them
+            print(f"[DEBUG] Using all {len(all_proxies)} proxies without checking")
             _PROXY_CACHE = all_proxies
             # If there's only one proxy, cache it separately
             if len(all_proxies) == 1:
                 _SINGLE_PROXY = all_proxies[0]
+                print(f"[DEBUG] Using single unchecked proxy: {_SINGLE_PROXY}")
                 return _SINGLE_PROXY
-            return random.choice(all_proxies)
+            selected_proxy = random.choice(all_proxies)
+            print(f"[DEBUG] Selected random unchecked proxy: {selected_proxy}")
+            return selected_proxy
 
     # No working proxies found
+    print(f"[DEBUG] No proxies found or no working proxies")
     _PROXY_CACHE = None
     return None
 

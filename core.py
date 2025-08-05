@@ -219,8 +219,16 @@ def process_items(queue):
     # for each keyword we parse data
     for query in all_queries:
         all_items = vinted.items.search(query[1], nbr_items=items_per_query)
-        # Filter to only include new items. This should reduce the amount of db calls.
-        data = [item for item in all_items if item.is_new_item()]
+        
+        # Debug: log info about found items
+        print(f"[DEBUG] Found {len(all_items)} total items for query")
+        if all_items:
+            first_item = all_items[0]
+            print(f"[DEBUG] First item age: {(first_item.created_at_ts).isoformat()}")
+            print(f"[DEBUG] Item is_new_item(60): {first_item.is_new_item(60)}")
+        
+        # Filter to only include new items (increased to 60 minutes for testing)
+        data = [item for item in all_items if item.is_new_item(60)]
         queue.put((data, query[0]))
         logger.info(f"Scraped {len(data)} items for query: {query[1]}")
 

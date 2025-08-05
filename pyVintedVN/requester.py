@@ -97,8 +97,13 @@ class Requester:
 
         # Set a random proxy for this request
         proxy_configured = proxies.configure_proxy(self.session)
-        if self.debug and proxy_configured:
-            logger.debug(f"Using proxy: {self.session.proxies}")
+        if self.debug:
+            if proxy_configured:
+                print(f"[DEBUG] Using proxy: {self.session.proxies}")
+                logger.debug(f"Using proxy: {self.session.proxies}")
+            else:
+                print(f"[DEBUG] No proxy configured - direct connection")
+                logger.debug("No proxy configured - direct connection")
 
         tried = 0
         new_session = False
@@ -137,7 +142,14 @@ class Requester:
                         # proxy
                         proxy_configured = proxies.configure_proxy(self.session)
                         if self.debug:
+                            print(f"[DEBUG] Session reset due to 401 error")
                             logger.debug("Session reset due to 401 error")
+                            if proxy_configured:
+                                print(f"[DEBUG] New session using proxy: {self.session.proxies}")
+                                logger.debug(f"New session using proxy: {self.session.proxies}")
+                            else:
+                                print(f"[DEBUG] New session - no proxy configured")
+                                logger.debug("New session - no proxy configured")
                         tried = 0
                         continue
                     return response
@@ -161,8 +173,13 @@ class Requester:
         """
         # Set a random proxy for this request
         proxy_configured = proxies.configure_proxy(self.session)
-        if self.debug and proxy_configured:
-            logger.debug(f"Using proxy: {self.session.proxies}")
+        if self.debug:
+            if proxy_configured:
+                print(f"[DEBUG] Using proxy: {self.session.proxies}")
+                logger.debug(f"Using proxy: {self.session.proxies}")
+            else:
+                print(f"[DEBUG] No proxy configured - direct connection")
+                logger.debug("No proxy configured - direct connection")
 
         response = self.session.post(url, params)
         response.raise_for_status()
