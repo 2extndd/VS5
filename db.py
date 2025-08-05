@@ -283,7 +283,7 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
         logger.info(f"Attempting to add item {id} to database (query_id: {query_id})")
         
         # Check if item already exists in database
-        if db.is_item_in_db_by_id(id):
+        if is_item_in_db_by_id(id):
             logger.info(f"Item {id} already exists in database, skipping...")
             return False
         
