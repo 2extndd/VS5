@@ -231,11 +231,12 @@ if __name__ == "__main__":
     # Plugin checker
     plugin_checker()
 
-    # Create a shared queue
-    items_queue = multiprocessing.Queue()
-    new_items_queue = multiprocessing.Queue()
-    rss_queue = multiprocessing.Queue()
-    telegram_queue = multiprocessing.Queue()
+    # Create a shared queue using Manager for better cross-platform compatibility
+    manager = multiprocessing.Manager()
+    items_queue = manager.Queue()
+    new_items_queue = manager.Queue()
+    rss_queue = manager.Queue()
+    telegram_queue = manager.Queue()
 
     # 1. Create and start the scrape process
     # This process will scrape items and put them in the items_queue

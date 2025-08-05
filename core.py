@@ -254,7 +254,9 @@ def clear_item_queue(items_queue, new_items_queue):
     """
     logger.info(f"[DEBUG] clear_item_queue called - queue empty: {items_queue.empty()}")
     if not items_queue.empty():
+        logger.info(f"[DEBUG] Found items in queue! Getting them...")
         data, query_id = items_queue.get()
+        logger.info(f"[DEBUG] Got {len(data)} items from queue for query_id {query_id}")
         for item in reversed(data):
 
             # If already in db, pass
