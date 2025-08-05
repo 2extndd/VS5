@@ -205,6 +205,11 @@ if __name__ == "__main__":
         
         logger.info("Database initialization phase completed")
         
+        # Reset API requests counter on bot start
+        logger.info("Resetting API requests counter...")
+        db.reset_api_requests()
+        logger.info("API requests counter reset")
+        
     except Exception as e:
         logger.error(f"CRITICAL ERROR during database initialization: {e}")
         logger.error(f"CRITICAL ERROR during database initialization: {e}")

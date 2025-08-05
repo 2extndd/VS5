@@ -37,11 +37,12 @@
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body text-center">
                 <div class="d-flex align-items-center justify-content-center mb-3">
-                    <i class="bi bi-bar-chart-fill text-warning" style="font-size: 2rem;"></i>
+                    <i class="bi bi-broadcast text-warning" style="font-size: 2rem;"></i>
                 </div>
-                <h5 class="card-title">Items per Day</h5>
-                <h2 class="display-4 fw-bold text-warning">{{ stats.items_per_day }}</h2>
-                <p class="card-text text-muted">Average items found daily</p>
+                <h5 class="card-title">API Requests</h5>
+                <h2 class="display-4 fw-bold text-warning">{{ stats.api_requests }}</h2>
+                <p class="card-text text-muted">Requests to Vinted since start</p>
+                <small class="text-muted d-block">Uptime: {{ stats.bot_uptime }}</small>
             </div>
         </div>
     </div>

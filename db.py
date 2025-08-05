@@ -802,43 +802,58 @@ def get_last_found_item():
             conn.close()
 
 
-def get_items_per_day():
-    conn = None
+def get_api_requests_count():
+    """Get total API requests to Vinted since bot start"""
     try:
-        conn, db_type = get_db_connection()
-        cursor = conn.cursor()
-
-        # Get total items
-        cursor.execute("SELECT COUNT(*) FROM items")
-        total_items = cursor.fetchone()[0]
-
-        if total_items == 0:
-            return 0
-
-        # Get earliest and latest timestamps
-        cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM items")
-        min_timestamp, max_timestamp = cursor.fetchone()
-
-        # Calculate number of days (add 1 to include both start and end days)
-        import datetime
-        # Convert Decimal to float for fromtimestamp
-        min_timestamp = float(min_timestamp) if min_timestamp else 0
-        max_timestamp = float(max_timestamp) if max_timestamp else 0
-        min_date = datetime.datetime.fromtimestamp(min_timestamp).date()
-        max_date = datetime.datetime.fromtimestamp(max_timestamp).date()
-        days_diff = (max_date - min_date).days + 1
-
-        # Ensure at least 1 day to avoid division by zero
-        days_diff = max(1, days_diff)
-
-        # Calculate items per day
-        return round(total_items / days_diff, 1)
+        vinted_requests = get_parameter('vinted_api_requests')
+        return int(vinted_requests) if vinted_requests else 0
     except Exception:
-        print_exc()
         return 0
-    finally:
-        if conn:
-            conn.close()
+
+
+def increment_api_requests():
+    """Increment API requests counter"""
+    try:
+        current_count = get_api_requests_count()
+        set_parameter('vinted_api_requests', str(current_count + 1))
+    except Exception:
+        pass
+
+
+def reset_api_requests():
+    """Reset API requests counter (called on bot start)"""
+    try:
+        import time
+        set_parameter('vinted_api_requests', '0')
+        set_parameter('bot_start_time', str(int(time.time())))
+    except Exception:
+        pass
+
+
+def get_bot_uptime():
+    """Get bot uptime in human readable format"""
+    try:
+        start_time = get_parameter('bot_start_time')
+        if not start_time:
+            return "Unknown"
+        
+        import time
+        uptime_seconds = int(time.time()) - int(start_time)
+        
+        if uptime_seconds < 60:
+            return f"{uptime_seconds}s"
+        elif uptime_seconds < 3600:
+            return f"{uptime_seconds // 60}m"
+        elif uptime_seconds < 86400:
+            hours = uptime_seconds // 3600
+            minutes = (uptime_seconds % 3600) // 60
+            return f"{hours}h {minutes}m"
+        else:
+            days = uptime_seconds // 86400
+            hours = (uptime_seconds % 86400) // 3600
+            return f"{days}d {hours}h"
+    except Exception:
+        return "Unknown"
 
 
 def update_query_last_found(query_id, timestamp):

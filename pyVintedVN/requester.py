@@ -176,6 +176,13 @@ class requester:
             try:
                 response = self.session.get(url, params=params, timeout=30, allow_redirects=True)
                 
+                # Increment API request counter
+                try:
+                    import db
+                    db.increment_api_requests()
+                except:
+                    pass  # Don't fail request if counter fails
+                
                 if self.debug:
                     logger.info(f"[DEBUG] Request to {url} returned status {response.status_code}")
                 

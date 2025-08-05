@@ -349,7 +349,8 @@ def index():
     stats = {
         'total_items': db.get_total_items_count(),
         'total_queries': db.get_total_queries_count(),
-        'items_per_day': db.get_items_per_day()
+        'api_requests': db.get_api_requests_count(),
+        'bot_uptime': db.get_bot_uptime()
     }
 
     # Get the last found item
@@ -1392,7 +1393,7 @@ def system_analysis():
         
         # Get recent activity stats
         total_items = db.get_total_items_count()
-        items_today = db.get_items_per_day()
+        items_today = 0  # Removed old items_per_day calculation
         
         analysis = {
             'configuration': {
