@@ -831,6 +831,82 @@ def api_logs():
     })
 
 
+@app.route('/start_schedulers')
+def start_schedulers():
+    """Manually start schedulers if they're not running"""
+    try:
+        import threading
+        import time
+        from apscheduler.schedulers.background import BackgroundScheduler
+        
+        # Get current parameters
+        query_refresh_delay_param = db.get_parameter("query_refresh_delay")
+        current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 30
+        
+        # Global schedulers (if they exist)
+        global scraper_scheduler, processor_scheduler
+        
+        results = []
+        
+        # Check and start scraper scheduler
+        try:
+            if 'scraper_scheduler' not in globals() or not scraper_scheduler.running:
+                scraper_scheduler = BackgroundScheduler()
+                import core
+                import queue
+                
+                # Create a queue for this scheduler
+                items_queue = queue.Queue()
+                
+                scraper_scheduler.add_job(
+                    core.process_items, 
+                    'interval', 
+                    seconds=current_query_refresh_delay,
+                    args=[items_queue], 
+                    name="scraper"
+                )
+                scraper_scheduler.start()
+                results.append(f"✅ Scraper scheduler started ({current_query_refresh_delay}s)")
+            else:
+                results.append(f"✅ Scraper scheduler already running")
+        except Exception as e:
+            results.append(f"❌ Scraper scheduler error: {e}")
+        
+        # Check and start processor scheduler  
+        try:
+            if 'processor_scheduler' not in globals() or not processor_scheduler.running:
+                processor_scheduler = BackgroundScheduler()
+                
+                new_items_queue = queue.Queue()
+                
+                processor_scheduler.add_job(
+                    core.clear_item_queue,
+                    'interval', 
+                    seconds=1,
+                    args=[items_queue, new_items_queue], 
+                    name="item_processor"
+                )
+                processor_scheduler.start()
+                results.append("✅ Processor scheduler started (1s)")
+            else:
+                results.append("✅ Processor scheduler already running")
+        except Exception as e:
+            results.append(f"❌ Processor scheduler error: {e}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Schedulers check completed',
+            'results': results,
+            'refresh_delay': current_query_refresh_delay
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error', 
+            'message': f'Error starting schedulers: {e}'
+        })
+
+
 def web_ui_process():
     logger.info("Web UI process started")
     

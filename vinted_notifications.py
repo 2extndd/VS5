@@ -262,8 +262,14 @@ if __name__ == "__main__":
     logger.info("[DEBUG] Web UI app imported, starting server...")
     
     try:
+        # Start schedulers in threads before starting Flask
+        logger.info("[DEBUG] All schedulers started, now starting Flask server...")
+        logger.info(f"[DEBUG] Scraper scheduler running: {scraper_scheduler.running}")
+        logger.info(f"[DEBUG] Processor scheduler running: {processor_scheduler.running}")
+        logger.info(f"[DEBUG] Monitor scheduler running: {monitor_scheduler.running}")
+        
         # This will block and serve the web UI
-        app.run(host='0.0.0.0', port=port, debug=False)
+        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
     except KeyboardInterrupt:
         logger.info("Main process interrupted")
         scraper_scheduler.shutdown()
