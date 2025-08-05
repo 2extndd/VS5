@@ -53,10 +53,7 @@ VALUES ('telegram_enabled', 'False'),
        ('telegram_chat_id', ''),
        ('telegram_process_running', 'False'),
 
-       ('rss_enabled', 'False'),
-       ('rss_port', '8080'),
-       ('rss_max_items', '100'),
-       ('rss_process_running', 'False'),
+       -- RSS parameters removed
 
        ('version', '1.2'),
        ('github_url', 'https://github.com/Fuyucch1/Vinted-Notifications'),

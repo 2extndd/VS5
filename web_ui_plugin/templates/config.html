@@ -88,44 +88,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header d-flex align-items-center">
-                                    <i class="bi bi-rss me-2 text-info"></i>
-                                    <h5 class="card-title mb-0">RSS Feed</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <div class="form-check form-switch">
-                                            {% if params.rss_enabled == 'True' %}
-                                            <input class="form-check-input" type="checkbox" id="rss_enabled"
-                                                   name="rss_enabled" checked>
-                                            {% else %}
-                                            <input class="form-check-input" type="checkbox" id="rss_enabled"
-                                                   name="rss_enabled">
-                                            {% endif %}
-                                            <label class="form-check-label" for="rss_enabled">
-                                                Auto Start
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="rss_port" class="form-label">Port</label>
-                                        <input type="number" class="form-control" id="rss_port" name="rss_port"
-                                               value="{{ params.rss_port }}">
-                                        <small class="form-text text-muted">The port on which the RSS feed will be
-                                            served</small>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="rss_max_items" class="form-label">Maximum Items</label>
-                                        <input type="number" class="form-control" id="rss_max_items"
-                                               name="rss_max_items" value="{{ params.rss_max_items }}">
-                                        <small class="form-text text-muted">Maximum number of items to keep in the RSS
-                                            feed</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- RSS Feed section removed -->
                     </div>
                     <div class="row mb-4">
                         <div class="col-md-12">

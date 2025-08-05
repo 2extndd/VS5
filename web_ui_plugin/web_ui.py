@@ -343,7 +343,7 @@ def index():
 
     # Get process status from the database
     telegram_running = db.get_parameter('telegram_process_running') == 'True'
-    rss_running = db.get_parameter('rss_process_running') == 'True'
+    # RSS functionality removed
 
     # Get statistics for the dashboard
     stats = {
@@ -386,8 +386,8 @@ def index():
                            params=params,
                            queries=formatted_queries,
                            items=formatted_items,
-                           telegram_running=telegram_running,
-                           rss_running=rss_running,
+                                   telegram_running=telegram_running,
+        # RSS removed
                            stats=stats)
 
 
@@ -743,11 +743,7 @@ def update_config():
     db.set_parameter('telegram_token', request.form.get('telegram_token', ''))
     db.set_parameter('telegram_chat_id', request.form.get('telegram_chat_id', ''))
 
-    # Update RSS parameters
-    rss_enabled = 'rss_enabled' in request.form
-    db.set_parameter('rss_enabled', str(rss_enabled))
-    db.set_parameter('rss_port', request.form.get('rss_port', '8080'))
-    db.set_parameter('rss_max_items', request.form.get('rss_max_items', '100'))
+    # RSS parameters removed
 
     # Update System parameters
     db.set_parameter('items_per_query', request.form.get('items_per_query', '20'))
@@ -769,7 +765,7 @@ def update_config():
 
 @app.route('/control/<process_name>/<action>', methods=['POST'])
 def control_process(process_name, action):
-    if process_name not in ['telegram', 'rss']:
+    if process_name not in ['telegram']:
         return jsonify({'status': 'error', 'message': 'Invalid process name'})
 
     if action == 'start':
@@ -791,16 +787,7 @@ def control_process(process_name, action):
             logger.info("Telegram bot process start requested")
             return jsonify({'status': 'success', 'message': 'Telegram bot start requested'})
 
-        elif process_name == 'rss':
-            # Check current status
-            if db.get_parameter('rss_process_running') == 'True':
-                return jsonify({'status': 'warning', 'message': 'RSS feed already running'})
-
-            # Update process status in the database
-            # The manager process will detect this and start the process
-            db.set_parameter('rss_process_running', 'True')
-            logger.info("RSS feed process start requested")
-            return jsonify({'status': 'success', 'message': 'RSS feed start requested'})
+        # RSS process removed
 
     elif action == 'stop':
         if process_name == 'telegram':
@@ -814,16 +801,7 @@ def control_process(process_name, action):
             logger.info("Telegram bot process stop requested")
             return jsonify({'status': 'success', 'message': 'Telegram bot stop requested'})
 
-        elif process_name == 'rss':
-            # Check current status
-            if db.get_parameter('rss_process_running') != 'True':
-                return jsonify({'status': 'warning', 'message': 'RSS feed not running'})
-
-            # Update process status in the database
-            # The manager process will detect this and stop the process
-            db.set_parameter('rss_process_running', 'False')
-            logger.info("RSS feed process stop requested")
-            return jsonify({'status': 'success', 'message': 'RSS feed stop requested'})
+        # RSS process removed
 
     return jsonify({'status': 'error', 'message': 'Invalid action'})
 
@@ -832,11 +810,10 @@ def control_process(process_name, action):
 def process_status():
     # Get process status from the database
     telegram_running = db.get_parameter('telegram_process_running') == 'True'
-    rss_running = db.get_parameter('rss_process_running') == 'True'
+    # RSS removed
 
     return jsonify({
-        'telegram': telegram_running,
-        'rss': rss_running
+        'telegram': telegram_running
     })
 
 

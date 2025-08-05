@@ -228,22 +228,7 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="d-flex ms-auto me-3 align-items-center">
-            {% if github_url is defined %}
-            {% if is_up_to_date is defined %}
-            <span class="version-info text-light me-3 d-none d-md-flex align-items-center">
-                            {% if is_up_to_date %}
-                                <i class="bi bi-check-circle-fill text-success me-2"
-                                   style="text-shadow: 0 0 3px rgba(0,0,0,0.5);"></i> v{{ current_version }}
-                            {% else %}
-                                <i class="bi bi-exclamation-circle-fill text-warning me-2"></i> Update: {{ latest_version }}
-                            {% endif %}
-                        </span>
-            {% endif %}
-            <a href="{{ github_url }}" target="_blank" class="btn btn-outline-light btn-sm header-btn"
-               style="font-weight: bold; text-shadow: 0 0 3px rgba(0,0,0,0.3);">
-                <i class="bi bi-github me-1"></i> GitHub
-            </a>
-            {% endif %}
+            <!-- Removed GitHub link and update notifications -->
         </div>
     </div>
 </header>
@@ -309,47 +294,27 @@
 <footer class="footer mt-auto py-4 bg-white">
     <div class="container-fluid">
         <div class="row align-items-center">
-            <div class="col-md-4">
-                <p class="mb-1 d-flex align-items-center">
-                    <i class="bi bi-bell-fill me-2 text-info"></i>
-                    <strong class="text-info">Vinted Notifications</strong>
-                    <span class="badge bg-secondary ms-2">v{{ current_version }}</span>
-                </p>
-                <p class="text-muted small mb-0">
-                    &copy; {{ current_year }} <a href="{{ github_url }}" target="_blank"
-                                                 class="text-decoration-none text-info">Vinted Notifications</a>
-                </p>
-            </div>
-            <div class="col-md-4 text-center d-flex flex-column justify-content-center h-100">
-                <p class="mb-1">
-                    <a href="{{ github_url }}/issues" target="_blank" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-bug me-1"></i> Report an issue
+            <div class="col-md-8 text-center">
+                <div class="d-flex justify-content-center align-items-center gap-4">
+                    <a href="https://t.me/extndd" target="_blank" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-telegram me-1"></i> @extndd
                     </a>
-                </p>
-                <p class="text-muted small mb-0">
-                    <a href="{{ github_url }}#readme" target="_blank" class="text-decoration-none">
-                        <i class="bi bi-book me-1"></i> Documentation
+                    <a href="https://t.me/extnddlifeceo" target="_blank" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-telegram me-1"></i> @extnddlifeceo
                     </a>
-                </p>
+                </div>
             </div>
             <div class="col-md-4 text-end">
-                <p class="mb-1">
-                    <a href="{{ github_url }}" target="_blank" class="btn btn-sm btn-primary"
-                       style="color: white; font-weight: bold;">
-                        <i class="bi bi-github me-1"></i> GitHub
+                <p class="mb-1 d-flex align-items-center justify-content-end">
+                    <i class="bi bi-bell-fill me-2 text-info"></i>
+                    <strong class="text-info">Vinted Notification</strong>
+                    <span class="badge bg-secondary ms-2">v{{ current_version }}</span>
+                </p>
+                <p class="text-muted small mb-0 text-end">
+                    <a href="https://github.com/2extndd/VS5" target="_blank" class="text-decoration-none text-muted">
+                        <i class="bi bi-github me-1"></i> github.com/2extndd/VS5
                     </a>
                 </p>
-                {% if is_up_to_date is defined %}
-                <p class="text-muted small mb-0">
-                    {% if is_up_to_date %}
-                    <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i> Up to date</span>
-                    {% else %}
-                    <a href="{{ github_url }}/releases" target="_blank"
-                       class="badge bg-warning text-dark text-decoration-none"><i
-                            class="bi bi-arrow-up-circle-fill me-1"></i> Update available: {{ latest_version }}</a>
-                    {% endif %}
-                </p>
-                {% endif %}
             </div>
         </div>
     </div>

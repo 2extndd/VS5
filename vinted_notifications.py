@@ -1,7 +1,7 @@
 import multiprocessing, time, core, os, db, configuration_values
 from apscheduler.schedulers.background import BackgroundScheduler
 from logger import get_logger
-from rss_feed_plugin.rss_feed import rss_feed_process
+# RSS functionality removed
 from web_ui_plugin.web_ui import web_ui_process
 
 # Get logger for this module
@@ -76,14 +76,13 @@ def item_extractor(items_queue, new_items_queue):
         logger.error(f"Traceback: {traceback.format_exc()}")
 
 
-def dispatcher_function(input_queue, rss_queue, telegram_queue):
+def dispatcher_function(input_queue, telegram_queue):
     logger.info("Dispatcher process started")
     try:
         while True:
             # Get from input queue
             item = input_queue.get()
-            # Send to RSS queue
-            rss_queue.put(item)
+            # RSS functionality removed
             #
             telegram_queue.put(item)
     except (KeyboardInterrupt, SystemExit):
@@ -130,7 +129,7 @@ def check_refresh_delay(items_queue):
         logger.error(f"Error updating refresh delay: {e}", exc_info=True)
 
 
-def monitor_processes(items_queue, telegram_queue, rss_queue):
+def monitor_processes(items_queue, telegram_queue):
     # Check if the query refresh delay has changed
     check_refresh_delay(items_queue)
 
@@ -139,19 +138,17 @@ def monitor_processes(items_queue, telegram_queue, rss_queue):
 
 
 def plugin_checker():
-    # Get telegram and rss enable status
+    # Get telegram enable status
     telegram_enabled = db.get_parameter('telegram_enabled') or 'False'
     logger.info("Telegram enabled: {}".format(telegram_enabled))
-    rss_enabled = db.get_parameter('rss_enabled') or 'False'
-    logger.info("RSS enabled: {}".format(rss_enabled))
+    # RSS functionality removed
 
     # Force Telegram bot to be enabled by default (Railway production environment)
     logger.info("Forcing Telegram bot to be enabled for production")
     db.set_parameter('telegram_enabled', 'True')
     db.set_parameter('telegram_process_running', 'True')
     
-    # Keep RSS as configured
-    db.set_parameter('rss_process_running', rss_enabled)
+    # RSS removed
 
 
 if __name__ == "__main__":
@@ -225,7 +222,7 @@ if __name__ == "__main__":
     manager = multiprocessing.Manager()
     items_queue = manager.Queue()
     new_items_queue = manager.Queue()
-    rss_queue = manager.Queue()
+    # RSS queue removed
     telegram_queue = manager.Queue()
     logger.info("[DEBUG] Queues created successfully!")
 
@@ -256,7 +253,7 @@ if __name__ == "__main__":
     # Start monitor scheduler  
     monitor_scheduler = BackgroundScheduler()
     monitor_scheduler.add_job(monitor_processes, 'interval', seconds=5, 
-                             args=[items_queue, telegram_queue, rss_queue], name="process_monitor")
+                             args=[items_queue, telegram_queue], name="process_monitor")
     monitor_scheduler.start()
     logger.info("[DEBUG] Monitor scheduler started!")
 
