@@ -240,9 +240,9 @@ def process_items(queue):
         
         # Temporarily disable time filter for testing - accept all items
         data = all_items  # [item for item in all_items if item.is_new_item(1440)]
-        print(f"[DEBUG] Putting {len(data)} items into queue for query_id {query[0]}")
+        logger.info(f"[DEBUG] Putting {len(data)} items into queue for query_id {query[0]}")
         queue.put((data, query[0]))
-        print(f"[DEBUG] Successfully put items into queue")
+        logger.info(f"[DEBUG] Successfully put items into queue")
         logger.info(f"Scraped {len(data)} items for query: {query[1]}")
 
 
@@ -251,7 +251,7 @@ def clear_item_queue(items_queue, new_items_queue):
     Process items from the items_queue.
     This function is scheduled to run frequently.
     """
-    print(f"[DEBUG] clear_item_queue called - queue empty: {items_queue.empty()}")
+    logger.info(f"[DEBUG] clear_item_queue called - queue empty: {items_queue.empty()}")
     if not items_queue.empty():
         data, query_id = items_queue.get()
         for item in reversed(data):
