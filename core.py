@@ -238,8 +238,8 @@ def process_items(queue):
         else:
             print(f"[DEBUG] *** NO ITEMS RETURNED FROM SEARCH ***")
         
-        # Filter to only include new items (increased to 60 minutes for testing)
-        data = [item for item in all_items if item.is_new_item(60)]
+        # Filter to only include new items (increased to 24 hours for testing)
+        data = [item for item in all_items if item.is_new_item(1440)]
         queue.put((data, query[0]))
         logger.info(f"Scraped {len(data)} items for query: {query[1]}")
 
