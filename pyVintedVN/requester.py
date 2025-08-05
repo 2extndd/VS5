@@ -223,4 +223,4 @@ class requester:
             elif tried == self.MAX_RETRIES:
                 return response
 
-        return response
+        return response# Force cache refresh
