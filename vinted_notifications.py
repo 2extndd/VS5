@@ -224,10 +224,10 @@ if __name__ == "__main__":
     # RAILWAY FIX: Use single process with threads instead of multiprocessing
     logger.info("[DEBUG] RAILWAY MODE: Starting single-process architecture...")
     
-    # Get refresh delay
+    # Get refresh delay - FORCE to 30 seconds for now
     query_refresh_delay_param = db.get_parameter("query_refresh_delay")
-    current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
-    logger.info(f"[DEBUG] Query refresh delay: {current_query_refresh_delay}")
+    current_query_refresh_delay = 30  # FORCE 30 seconds
+    logger.info(f"[DEBUG] FORCED Query refresh delay: {current_query_refresh_delay} (was {query_refresh_delay_param})")
     
     # Start scraper scheduler in the main process
     logger.info("[DEBUG] Starting scraper scheduler...")
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     scraper_scheduler.add_job(core.process_items, 'interval', seconds=current_query_refresh_delay, 
                              args=[items_queue], name="scraper")
     scraper_scheduler.start()
-    logger.info("[DEBUG] Scraper scheduler started!")
+    logger.info("[DEBUG] Scraper scheduler started with 30 sec interval!")
     
     # Start item processor scheduler - THIS WAS MISSING!
     logger.info("[DEBUG] Starting item processor scheduler...")

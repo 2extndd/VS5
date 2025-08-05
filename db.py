@@ -795,6 +795,9 @@ def get_items_per_day():
 
         # Calculate number of days (add 1 to include both start and end days)
         import datetime
+        # Convert Decimal to float for fromtimestamp
+        min_timestamp = float(min_timestamp) if min_timestamp else 0
+        max_timestamp = float(max_timestamp) if max_timestamp else 0
         min_date = datetime.datetime.fromtimestamp(min_timestamp).date()
         max_date = datetime.datetime.fromtimestamp(max_timestamp).date()
         days_diff = (max_date - min_date).days + 1
