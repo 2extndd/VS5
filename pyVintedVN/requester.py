@@ -110,23 +110,24 @@ class Requester:
         while tried < self.MAX_RETRIES:
             tried += 1
             with self.session.get(url, params=params) as response:
-                            if self.debug:
-                logger.info(f"[DEBUG] Request to {url} returned status {response.status_code}")
-                logger.info(f"[DEBUG] Response headers: {dict(response.headers)}")
-                if response.text:
-                    logger.info(f"[DEBUG] Response text (first 500 chars): {response.text[:500]}")
-                    logger.debug(f"Request to {url} returned status {response.status_code}")
-                    logger.debug(f"Response headers: {dict(response.headers)}")
+                if self.debug:
+                    logger.info(f"[DEBUG] Request to {url} returned status {response.status_code}")
+                    logger.info(f"[DEBUG] Response headers: {dict(response.headers)}")
                     if response.text:
-                        logger.debug(f"Response text (first 500 chars): {response.text[:500]}")
+                        logger.info(f"[DEBUG] Response text (first 500 chars): {response.text[:500]}")
+                        
+                logger.debug(f"Request to {url} returned status {response.status_code}")
+                logger.debug(f"Response headers: {dict(response.headers)}")
+                if response.text:
+                    logger.debug(f"Response text (first 500 chars): {response.text[:500]}")
                 
                 if response.status_code in (401, 404) and tried < self.MAX_RETRIES:
-                                    logger.info(f"Cookies invalid, retrying {tried}/{self.MAX_RETRIES}")
-                if self.debug:
-                    logger.info(f"[DEBUG] Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
-                    logger.info(f"[DEBUG] Current cookies: {dict(self.session.cookies)}")
-                        logger.debug(f"Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
-                        logger.debug(f"Current cookies: {dict(self.session.cookies)}")
+                    logger.info(f"Cookies invalid, retrying {tried}/{self.MAX_RETRIES}")
+                    if self.debug:
+                        logger.info(f"[DEBUG] Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
+                        logger.info(f"[DEBUG] Current cookies: {dict(self.session.cookies)}")
+                    logger.debug(f"Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
+                    logger.debug(f"Current cookies: {dict(self.session.cookies)}")
                     self.set_cookies()
                 elif response.status_code == 200:
                     return response
@@ -142,7 +143,7 @@ class Requester:
                         # proxy
                         proxy_configured = proxies.configure_proxy(self.session)
                         if self.debug:
-                                                            logger.info(f"[DEBUG] Session reset due to 401 error")
+                            logger.info(f"[DEBUG] Session reset due to 401 error")
                             if proxy_configured:
                                 logger.info(f"[DEBUG] New session using proxy: {self.session.proxies}")
                             else:
