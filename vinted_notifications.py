@@ -286,7 +286,7 @@ if __name__ == "__main__":
 
     try:
         # Wait for processes to finish (which they won't unless interrupted)
-        scrape_process.join()
+        scraper_proc.join()
         item_extractor_process.join()
         dispatcher_process.join()
         web_ui_process_instance.join()
@@ -304,7 +304,7 @@ if __name__ == "__main__":
         monitor_scheduler.shutdown()
 
         # Terminate all processes
-        scrape_process.terminate()
+        scraper_proc.terminate()
         item_extractor_process.terminate()
         dispatcher_process.terminate()
         # Terminate web UI process
@@ -322,7 +322,7 @@ if __name__ == "__main__":
             db.set_parameter('rss_process_running', 'False')
 
         # Wait for all processes to terminate
-        scrape_process.join()
+        scraper_proc.join()
         item_extractor_process.join()
         dispatcher_process.join()
         web_ui_process_instance.join()
