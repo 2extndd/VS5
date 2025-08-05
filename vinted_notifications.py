@@ -221,7 +221,7 @@ if __name__ == "__main__":
     telegram_queue = manager.Queue()
     logger.info("[DEBUG] Queues created successfully!")
 
-    # RAILWAY FIX: Use single process instead of multiprocessing
+    # RAILWAY FIX: Use single process with threads instead of multiprocessing
     logger.info("[DEBUG] RAILWAY MODE: Starting single-process architecture...")
     
     # Get refresh delay
@@ -236,6 +236,14 @@ if __name__ == "__main__":
                              args=[items_queue], name="scraper")
     scraper_scheduler.start()
     logger.info("[DEBUG] Scraper scheduler started!")
+    
+    # Start item processor scheduler - THIS WAS MISSING!
+    logger.info("[DEBUG] Starting item processor scheduler...")
+    processor_scheduler = BackgroundScheduler()
+    processor_scheduler.add_job(core.clear_item_queue, 'interval', seconds=1, 
+                               args=[items_queue, new_items_queue], name="item_processor")
+    processor_scheduler.start()
+    logger.info("[DEBUG] Item processor scheduler started!")
     
     # Start monitor scheduler  
     monitor_scheduler = BackgroundScheduler()
@@ -259,5 +267,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Main process interrupted")
         scraper_scheduler.shutdown()
+        processor_scheduler.shutdown()
         monitor_scheduler.shutdown()
         logger.info("All schedulers stopped")
