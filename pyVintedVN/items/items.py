@@ -50,8 +50,16 @@ class Items:
         locale = urlparse(url).netloc
         
         # Create a local requester instance with proxy support
-        from pyVintedVN.requester import requester as requester_class
-        requester_instance = requester_class(with_proxy=True, debug=True)
+        from pyVintedVN.requester import requester as requester_module
+        
+        # Check if requester is a class or instance
+        if hasattr(requester_module, '__call__') and hasattr(requester_module, 'with_proxy'):
+            # It's already an instance, use it directly
+            requester_instance = requester_module
+        else:
+            # It's a class, create new instance
+            requester_instance = requester_module(with_proxy=True, debug=True)
+        
         requester_instance.set_locale(locale)
 
         # Parse the URL to get the API parameters
