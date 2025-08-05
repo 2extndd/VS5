@@ -145,8 +145,26 @@ def get_random_proxy() -> Optional[str]:
             if proxy_list.startswith('[') and proxy_list.endswith(']'):
                 all_proxies = eval(proxy_list)
             else:
-                # If PROXY_LIST is a string with multiple proxies separated by semicolons
-                all_proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
+                # If PROXY_LIST is a string with multiple proxies separated by semicolons OR newlines
+                # First try splitting by newlines (for column format)
+                proxies_by_lines = [p.strip() for p in proxy_list.split('\n') if p.strip()]
+                if len(proxies_by_lines) > 1:
+                    # Multiple lines found - use line-by-line format
+                    all_proxies = proxies_by_lines
+                else:
+                    # Single line or no newlines - use semicolon format
+                    all_proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
+                
+                # Convert WebShare format proxies to standard format
+                converted_proxies = []
+                for proxy in all_proxies:
+                    parts = proxy.strip().split(':')
+                    if len(parts) == 4 and not ('://' in proxy or '@' in proxy):
+                        # WebShare format: ip:port:user:pass -> http://user:pass@ip:port
+                        converted_proxies.append(convert_webshare_to_standard(proxy))
+                    else:
+                        converted_proxies.append(proxy)
+                all_proxies = converted_proxies
             logger.info(f"[DEBUG] Parsed {len(all_proxies)} proxies from proxy_list")
         except Exception as e:
             logger.error(f"[DEBUG] Error parsing proxy_list: {e}")
@@ -243,6 +261,22 @@ def check_proxy(proxy: str) -> bool:
             session.close()
 
 
+def convert_webshare_to_standard(proxy: str) -> str:
+    """
+    Convert WebShare format (ip:port:user:pass) to standard format (http://user:pass@ip:port)
+    
+    Args:
+        proxy (str): Proxy in WebShare format
+        
+    Returns:
+        str: Proxy in standard format
+    """
+    parts = proxy.strip().split(':')
+    if len(parts) == 4:
+        ip, port, user, password = parts
+        return f"http://{user}:{password}@{ip}:{port}"
+    return proxy
+
 def convert_proxy_string_to_dict(proxy: Optional[str]) -> dict:
     """
     Convert a proxy string to a dictionary format.
@@ -251,6 +285,7 @@ def convert_proxy_string_to_dict(proxy: Optional[str]) -> dict:
     - user:pass@ip:port  
     - protocol://ip:port
     - protocol://user:pass@ip:port
+    - ip:port:user:pass (WebShare format)
 
     Args:
         proxy (Optional[str]): Proxy string to convert.
@@ -260,6 +295,12 @@ def convert_proxy_string_to_dict(proxy: Optional[str]) -> dict:
     """
     if proxy is None:
         return {}
+
+    # Check if it's WebShare format (ip:port:user:pass)
+    parts = proxy.strip().split(':')
+    if len(parts) == 4 and not ('://' in proxy or '@' in proxy):
+        # Convert WebShare format to standard format
+        proxy = convert_webshare_to_standard(proxy)
 
     # Handle protocol-specified proxies
     if '://' in proxy:

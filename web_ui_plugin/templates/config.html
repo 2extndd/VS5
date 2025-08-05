@@ -158,12 +158,13 @@
                                                 <textarea class="form-control" id="proxy_list" name="proxy_list"
                                                           rows="3">{{ params.proxy_list }}</textarea>
                                                 <small class="form-text text-muted">List of proxies separated by
-                                                    semicolons (;)<br>
+                                                    semicolons (;) or newlines<br>
                                                     Supported formats:<br>
                                                     • ip:port<br>
                                                     • user:pass@ip:port (with authentication)<br>
                                                     • http://ip:port<br>
-                                                    • http://user:pass@ip:port</small>
+                                                    • http://user:pass@ip:port<br>
+                                                    • <strong>ip:port:user:pass (WebShare format)</strong></small>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="proxy_list_link" class="form-label">Proxy List Link</label>
