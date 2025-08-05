@@ -1152,6 +1152,58 @@ def send_items_to_telegram():
         })
 
 
+@app.route('/set_thread_ids')
+def set_thread_ids():
+    """Quick setup of thread_ids for queries"""
+    try:
+        # Example thread_ids (user should modify these)
+        thread_mappings = {
+            'MM 6': '123',      # Замени на реальный thread_id для MM6
+            'Prada': '456',     # Замени на реальный thread_id для Prada
+            'D&G': '789',       # Замени на реальный thread_id для D&G
+        }
+        
+        # Get all queries
+        queries = db.get_queries()
+        updated_count = 0
+        
+        for query in queries:
+            query_id, query_url, query_name = query[0], query[1], query[2] if len(query) > 2 else None
+            
+            # Find matching thread_id based on query name
+            thread_id = None
+            query_display = query_name or query_url
+            
+            for brand, tid in thread_mappings.items():
+                if brand.lower() in query_display.lower():
+                    thread_id = tid
+                    break
+            
+            if thread_id:
+                # Update thread_id for this query
+                success = db.update_query_thread_id(query_id, thread_id)
+                if success:
+                    updated_count += 1
+                    logger.info(f"✅ Updated thread_id for query {query_id} ({query_display}): {thread_id}")
+                else:
+                    logger.error(f"❌ Failed to update thread_id for query {query_id}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Updated thread_ids for {updated_count} queries',
+            'updated_count': updated_count,
+            'total_queries': len(queries),
+            'mappings': thread_mappings,
+            'note': 'Modify the thread_mappings in the code with your real thread_ids'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error setting thread_ids: {e}'
+        })
+
+
 def web_ui_process():
     logger.info("Web UI process started")
     
