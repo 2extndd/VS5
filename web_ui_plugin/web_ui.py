@@ -426,15 +426,32 @@ def queries():
             'thread_id': thread_id
         })
 
-    # Sort by thread_id (None/empty first, then by ascending thread_id)
+    # Sort by thread_id AND query name within each thread group
     def sort_key(q):
         thread_id = q['thread_id']
+        query_name = q['display']
+        
+        # Primary sort: thread_id
         if thread_id is None or thread_id == '':
-            return (0, 0)  # No thread_id first
-        try:
-            return (1, int(thread_id))  # Then by thread_id number
-        except (ValueError, TypeError):
-            return (2, str(thread_id))  # Non-numeric thread_ids last
+            thread_priority = (0, 0)
+        else:
+            try:
+                thread_priority = (1, int(thread_id))
+            except (ValueError, TypeError):
+                thread_priority = (2, str(thread_id))
+        
+        # Secondary sort: query name (natural sort for numbers)
+        import re
+        # Extract numbers from query name for natural sorting (D&G 1, D&G 2, D&G 3)
+        name_parts = re.findall(r'(\D+)(\d*)', query_name)
+        if name_parts:
+            text_part = name_parts[0][0].strip()
+            num_part = int(name_parts[0][1]) if name_parts[0][1] else 0
+            name_priority = (text_part, num_part)
+        else:
+            name_priority = (query_name, 0)
+        
+        return (thread_priority, name_priority)
 
     formatted_queries.sort(key=sort_key)
     
