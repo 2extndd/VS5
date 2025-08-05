@@ -306,6 +306,11 @@ def clear_item_queue(items_queue, new_items_queue):
                                       timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency)
                     logger.info(f"[DEBUG] Item {item.id} successfully added to database!")
                     
+                    # Update the query's last_found timestamp
+                    logger.info(f"[DEBUG] Updating last_found for query {query_id}")
+                    db.update_query_last_found(query_id, item.raw_timestamp)
+                    logger.info(f"[DEBUG] Query {query_id} last_found updated!")
+                    
                 except Exception as e:
                     logger.error(f"[ERROR] Failed to process item {item.id}: {e}")
                     import traceback
