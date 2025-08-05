@@ -289,8 +289,14 @@ def index():
         # Get the last timestamp for this query
         try:
             last_timestamp = db.get_last_timestamp(query[0])
-            last_found_item = datetime.fromtimestamp(last_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-        except:
+            if last_timestamp:
+                # Convert Decimal to float for PostgreSQL compatibility
+                timestamp_float = float(last_timestamp)
+                last_found_item = datetime.fromtimestamp(timestamp_float).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                last_found_item = "Never"
+        except Exception as e:
+            logger.warning(f"Error formatting timestamp: {e}")
             last_found_item = "Never"
 
         # Get thread_id (5th element, index 4) if available
@@ -397,8 +403,14 @@ def queries():
         # Get the last timestamp for this query
         try:
             last_timestamp = db.get_last_timestamp(query[0])
-            last_found_item = datetime.fromtimestamp(last_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-        except:
+            if last_timestamp:
+                # Convert Decimal to float for PostgreSQL compatibility
+                timestamp_float = float(last_timestamp)
+                last_found_item = datetime.fromtimestamp(timestamp_float).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                last_found_item = "Never"
+        except Exception as e:
+            logger.warning(f"Error formatting timestamp: {e}")
             last_found_item = "Never"
 
         # Get thread_id (5th element, index 4) if available
