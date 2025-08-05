@@ -56,8 +56,8 @@ class LeRobot:
             job_queue.run_once(self.set_commands, when=1)
             # Every day we check for a new version
             job_queue.run_repeating(self.check_version, interval=86400, first=1)
-            # Every second we check for new posts to send to telegram
-            job_queue.run_once(self.check_telegram_queue, when=1)
+            # Every second we check for new posts to send to telegram - REPEATING NOT ONCE!
+            job_queue.run_repeating(self.check_telegram_queue, interval=1, first=1)
 
             self.app.run_polling()
         except Exception as e:
@@ -357,24 +357,30 @@ class LeRobot:
 
     async def check_telegram_queue(self, context: ContextTypes.DEFAULT_TYPE):
         try:
-            while 1:
-                if not self.new_items_queue.empty():
-                    queue_item = self.new_items_queue.get()
-                    # Handle different queue formats: (content, url, text, buy_url, buy_text, thread_id, photo_url)
-                    if len(queue_item) == 7:
-                        content, url, text, buy_url, buy_text, thread_id, photo_url = queue_item
-                    elif len(queue_item) == 6:
-                        content, url, text, buy_url, buy_text, thread_id = queue_item
-                        photo_url = None
-                    else:
-                        content, url, text, buy_url, buy_text = queue_item
-                        thread_id = None
-                        photo_url = None
-                    
-                    await self.send_new_post(content, url, text, buy_url, buy_text, thread_id, photo_url)
+            # Process all items in queue (no infinite loop since it's called every second)
+            processed = 0
+            while not self.new_items_queue.empty() and processed < 10:  # Limit to 10 items per call
+                queue_item = self.new_items_queue.get()
+                logger.info(f"[TELEGRAM] Processing queue item: {queue_item}")
+                
+                # Handle different queue formats: (content, url, text, buy_url, buy_text, thread_id, photo_url)
+                if len(queue_item) == 7:
+                    content, url, text, buy_url, buy_text, thread_id, photo_url = queue_item
+                elif len(queue_item) == 6:
+                    content, url, text, buy_url, buy_text, thread_id = queue_item
+                    photo_url = None
                 else:
-                    await asyncio.sleep(0.1)
-                    pass
+                    content, url, text, buy_url, buy_text = queue_item
+                    thread_id = None
+                    photo_url = None
+                
+                logger.info(f"[TELEGRAM] Sending to Telegram: {content[:50]}...")
+                await self.send_new_post(content, url, text, buy_url, buy_text, thread_id, photo_url)
+                logger.info(f"[TELEGRAM] Item sent successfully!")
+                processed += 1
+                
+            if processed > 0:
+                logger.info(f"[TELEGRAM] Processed {processed} items from queue")
         except Exception as e:
             logger.error(f"Error checking telegram queue: {str(e)}", exc_info=True)
 

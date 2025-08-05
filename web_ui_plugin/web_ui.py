@@ -226,7 +226,11 @@ def force_start():
                             currency=first_item.currency
                         )
                         
-                        return f"SUCCESS: Found {len(items)} items, saved first item: {first_item.title}"
+                        # КРИТИЧНО: Обновляем статистику запроса!
+                        db.update_query_last_found(first_query[0], first_item.raw_timestamp)
+                        logger.info(f"Updated last_found for query {first_query[0]}")
+                        
+                        return f"SUCCESS: Found {len(items)} items, saved first item: {first_item.title}, updated statistics"
                     else:
                         return "SUCCESS: No items found in search"
                         
@@ -904,6 +908,61 @@ def start_schedulers():
         return jsonify({
             'status': 'error', 
             'message': f'Error starting schedulers: {e}'
+        })
+
+
+@app.route('/test_telegram')
+def test_telegram():
+    """Test Telegram sending manually"""
+    try:
+        # Test message
+        test_content = "🧪 <b>ТЕСТ TELEGRAM БОТА</b>\n\nЭто тестовое сообщение для проверки работы бота.\n\n💰 Цена: ТЕСТ\n🔗 Ссылка: ТЕСТ"
+        
+        # Send test message using requests (async alternative)
+        import requests
+        
+        token = db.get_parameter("telegram_token") 
+        chat_id = db.get_parameter("telegram_chat_id")
+        
+        if not token or not chat_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'Telegram token or chat_id not configured'
+            })
+        
+        # Send message via Telegram API
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = {
+            'chat_id': chat_id,
+            'text': test_content,
+            'parse_mode': 'HTML'
+        }
+        
+        response = requests.post(url, data=data, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Test message sent to Telegram successfully!',
+                    'telegram_response': result
+                })
+            else:
+                return jsonify({
+                    'status': 'error', 
+                    'message': f'Telegram API error: {result}'
+                })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': f'HTTP error: {response.status_code}'
+            })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error testing Telegram: {e}'
         })
 
 
