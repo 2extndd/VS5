@@ -23,11 +23,15 @@ USER_AGENTS = [
 # Default headers for HTTP requests (improved for Vinted compatibility)
 DEFAULT_HEADERS = {
     "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9,de;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br, zstd", 
     "Connection": "keep-alive",
-    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Dest": "empty", 
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "same-origin",
-    "Cache-Control": "no-cache"
+    "Sec-Ch-Ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache"
 }
