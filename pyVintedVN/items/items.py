@@ -53,12 +53,30 @@ class Items:
             response.raise_for_status()
 
             # Parse the response
-            items = response.json()
-            items = items["items"]
+            response_data = response.json()
+            
+            # Debug logs
+            print(f"[DEBUG] Items API response status: {response.status_code}")
+            print(f"[DEBUG] API URL: {api_url}")
+            print(f"[DEBUG] API params: {params}")
+            print(f"[DEBUG] Response JSON keys: {list(response_data.keys()) if response_data else 'None'}")
+            if 'items' in response_data:
+                print(f"[DEBUG] Number of items in API response: {len(response_data['items'])}")
+                if response_data['items']:
+                    first_item = response_data['items'][0]
+                    print(f"[DEBUG] First item ID: {first_item.get('id', 'Unknown')}")
+                    print(f"[DEBUG] First item title: {first_item.get('title', 'Unknown')}")
+            else:
+                print(f"[DEBUG] No 'items' key in API response")
+                print(f"[DEBUG] Full API response: {response_data}")
+            
+            items = response_data["items"]
 
             # Return either Item objects or raw JSON data
             if not json:
-                return [Item(_item) for _item in items]
+                item_objects = [Item(_item) for _item in items]
+                print(f"[DEBUG] Created {len(item_objects)} Item objects from API response")
+                return item_objects
             else:
                 return items
 

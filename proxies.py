@@ -90,6 +90,11 @@ def get_random_proxy() -> Optional[str]:
         Optional[str]: A randomly selected proxy string or None if no working proxies are found.
     """
     global _PROXY_CACHE, _PROXY_CACHE_INITIALIZED, _SINGLE_PROXY
+    
+    print(f"[DEBUG] get_random_proxy() called")
+    print(f"[DEBUG] _PROXY_CACHE_INITIALIZED: {_PROXY_CACHE_INITIALIZED}")
+    print(f"[DEBUG] _PROXY_CACHE: {_PROXY_CACHE}")
+    print(f"[DEBUG] _SINGLE_PROXY: {_SINGLE_PROXY}")
 
     # Import db here to avoid circular imports
     import db
