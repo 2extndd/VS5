@@ -261,7 +261,10 @@ if __name__ == "__main__":
     # This process will provide a web interface to control the application
     web_ui_process_instance = multiprocessing.Process(target=web_ui_process)
     web_ui_process_instance.start()
-    logger.info(f"Web UI started on port {configuration_values.WEB_UI_PORT}")
+    
+    # Port will be logged by the web UI process itself
+    port = int(os.environ.get('PORT', configuration_values.WEB_UI_PORT))
+    logger.info(f"Web UI starting on port {port}")
 
 
     try:

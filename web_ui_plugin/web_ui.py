@@ -540,8 +540,13 @@ def api_logs():
 
 def web_ui_process():
     logger.info("Web UI process started")
+    
+    # Use Railway's PORT environment variable if available, otherwise fallback to configured port
+    port = int(os.environ.get('PORT', configuration_values.WEB_UI_PORT))
+    logger.info(f"Starting web UI on port {port}")
+    
     try:
-        app.run(host='0.0.0.0', port=configuration_values.WEB_UI_PORT, debug=False)
+        app.run(host='0.0.0.0', port=port, debug=False)
     except (KeyboardInterrupt, SystemExit):
         logger.info("Web UI process stopped")
     except Exception as e:
