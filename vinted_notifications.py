@@ -293,11 +293,6 @@ if __name__ == "__main__":
         dispatcher_process.join()
         web_ui_process_instance.join()
 
-        # plugins
-        if telegram_process:
-            telegram_process.join()
-        if rss_process:
-            rss_process.join()
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
         logger.info("Main process interrupted")
@@ -312,27 +307,10 @@ if __name__ == "__main__":
         # Terminate web UI process
         web_ui_process_instance.terminate()
 
-        # Plugins
-
-        if telegram_process and telegram_process.is_alive():
-            telegram_process.terminate()
-            # Set the process status in the database
-            db.set_parameter('telegram_process_running', 'False')
-        if rss_process and rss_process.is_alive():
-            rss_process.terminate()
-            # Set the process status in the database
-            db.set_parameter('rss_process_running', 'False')
-
         # Wait for all processes to terminate
         scraper_proc.join()
         item_extractor_process.join()
         dispatcher_process.join()
         web_ui_process_instance.join()
-
-        # Plugins
-        if telegram_process:
-            telegram_process.join()
-        if rss_process:
-            rss_process.join()
 
         logger.info("All processes terminated")
