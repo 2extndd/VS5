@@ -66,6 +66,100 @@ def fix_settings():
             'message': f'Ошибка: {e}'
         })
 
+@app.route('/diagnose')
+def diagnose():
+    """Диагностика состояния системы"""
+    try:
+        import sys
+        import os
+        import psutil
+        import subprocess
+        
+        info = {
+            'timestamp': datetime.now().isoformat(),
+            'python_version': sys.version,
+            'working_directory': os.getcwd(),
+            'environment_vars': {
+                'DATABASE_URL': 'SET' if os.environ.get('DATABASE_URL') else 'NOT SET',
+                'PORT': os.environ.get('PORT', 'NOT SET')
+            },
+            'database_params': {},
+            'processes': [],
+            'files_exist': {},
+            'scheduler_status': 'UNKNOWN'
+        }
+        
+        # Проверяем параметры базы
+        try:
+            params = db.get_all_parameters()
+            info['database_params'] = params
+        except Exception as e:
+            info['database_params'] = {'error': str(e)}
+        
+        # Проверяем процессы
+        try:
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                if 'python' in proc.info['name'].lower():
+                    info['processes'].append({
+                        'pid': proc.info['pid'],
+                        'name': proc.info['name'],
+                        'cmdline': ' '.join(proc.info['cmdline']) if proc.info['cmdline'] else ''
+                    })
+        except Exception as e:
+            info['processes'] = [{'error': str(e)}]
+        
+        # Проверяем файлы
+        files_to_check = [
+            'vinted_notifications.py',
+            'core.py',
+            'db.py',
+            'pyVintedVN/vinted.py'
+        ]
+        
+        for file_path in files_to_check:
+            info['files_exist'][file_path] = os.path.exists(file_path)
+        
+        # Пытаемся запустить основной процесс принудительно
+        try:
+            import threading
+            import queue
+            
+            # Создаем очередь для тестирования
+            test_queue = queue.Queue()
+            
+            # Импортируем и тестируем core
+            sys.path.append('/app')  # Railway путь
+            sys.path.append('.')
+            
+            try:
+                import core
+                info['core_import'] = 'SUCCESS'
+                
+                # Пытаемся запустить process_items в отдельном потоке
+                def test_process():
+                    try:
+                        core.process_items(test_queue)
+                        return 'SUCCESS'
+                    except Exception as e:
+                        return f'ERROR: {e}'
+                
+                # Не запускаем процесс, только проверяем импорт
+                info['scheduler_status'] = 'READY TO START'
+                
+            except Exception as e:
+                info['core_import'] = f'ERROR: {e}'
+                
+        except Exception as e:
+            info['scheduler_status'] = f'ERROR: {e}'
+        
+        return jsonify(info)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        })
+
 @app.route('/')
 def index():
     # Get parameters
