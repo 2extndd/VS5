@@ -220,25 +220,25 @@ def process_items(queue):
 
     # for each keyword we parse data
     for query in all_queries:
-        print(f"[DEBUG] Calling vinted.items.search for query: {query[1]}")
-        print(f"[DEBUG] vinted.items type: {type(vinted.items)}")
-        print(f"[DEBUG] vinted.items.search method: {vinted.items.search}")
+        logger.info(f"[DEBUG] Calling vinted.items.search for query: {query[1]}")
+        logger.info(f"[DEBUG] vinted.items type: {type(vinted.items)}")
+        logger.info(f"[DEBUG] vinted.items.search method: {vinted.items.search}")
         all_items = vinted.items.search(query[1], nbr_items=items_per_query)
         
         # Debug: log info about found items
-        print(f"[DEBUG] *** CORE.PY *** Found {len(all_items)} total items for query")
-        print(f"[DEBUG] all_items type: {type(all_items)}")
+        logger.info(f"[DEBUG] *** CORE.PY *** Found {len(all_items)} total items for query")
+        logger.info(f"[DEBUG] all_items type: {type(all_items)}")
         if all_items:
             first_item = all_items[0]
-            print(f"[DEBUG] First item type: {type(first_item)}")
-            print(f"[DEBUG] First item: {first_item}")
+            logger.info(f"[DEBUG] First item type: {type(first_item)}")
+            logger.info(f"[DEBUG] First item: {first_item}")
             try:
-                print(f"[DEBUG] First item age: {(first_item.created_at_ts).isoformat()}")
-                print(f"[DEBUG] Item is_new_item(60): {first_item.is_new_item(60)}")
+                logger.info(f"[DEBUG] First item age: {(first_item.created_at_ts).isoformat()}")
+                logger.info(f"[DEBUG] Item is_new_item(60): {first_item.is_new_item(60)}")
             except Exception as e:
-                print(f"[DEBUG] Error accessing item attributes: {e}")
+                logger.info(f"[DEBUG] Error accessing item attributes: {e}")
         else:
-            print(f"[DEBUG] *** NO ITEMS RETURNED FROM SEARCH ***")
+            logger.info(f"[DEBUG] *** NO ITEMS RETURNED FROM SEARCH ***")
         
         # Temporarily disable time filter for testing - accept all items
         data = all_items  # [item for item in all_items if item.is_new_item(1440)]

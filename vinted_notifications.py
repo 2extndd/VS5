@@ -14,9 +14,9 @@ scrape_process = None
 current_query_refresh_delay = None
 
 def scraper_process(items_queue):
-    print("[DEBUG] Scraper process function called!")
+    logger.info("[DEBUG] Scraper process function called!")
     logger.info("Scrape process started")
-    print(f"[DEBUG] Queue object received: {items_queue}")
+    logger.info(f"[DEBUG] Queue object received: {items_queue}")
 
     # Get the query refresh delay from the database
     query_refresh_delay_param = db.get_parameter("query_refresh_delay")
@@ -26,9 +26,9 @@ def scraper_process(items_queue):
     scraper_scheduler = BackgroundScheduler()
     scraper_scheduler.add_job(core.process_items, 'interval', seconds=current_query_refresh_delay, args=[items_queue],
                               name="scraper")
-    print("[DEBUG] Starting scheduler...")
+    logger.info("[DEBUG] Starting scheduler...")
     scraper_scheduler.start()
-    print("[DEBUG] Scheduler started! Entering main loop...")
+    logger.info("[DEBUG] Scheduler started! Entering main loop...")
     try:
         # Keep the process running
         while True:
@@ -40,7 +40,7 @@ def scraper_process(items_queue):
 
 def item_extractor(items_queue, new_items_queue):
     logger.info("Item extractor process started")
-    print("[DEBUG] Item extractor process started")
+    logger.info("[DEBUG] Item extractor process started")
     try:
         loop_count = 0
         while True:
@@ -48,7 +48,7 @@ def item_extractor(items_queue, new_items_queue):
             core.clear_item_queue(items_queue, new_items_queue)
             loop_count += 1
             if loop_count % 100 == 0:  # Log every 10 seconds (100 * 0.1s)
-                print(f"[DEBUG] Item extractor loop count: {loop_count}")
+                logger.info(f"[DEBUG] Item extractor loop count: {loop_count}")
             time.sleep(0.1)  # Small sleep to prevent high CPU usage
     except (KeyboardInterrupt, SystemExit):
         logger.info("Consumer process stopped")
@@ -176,33 +176,33 @@ def plugin_checker():
 
 if __name__ == "__main__":
     # Starting sequence - FORCE DATABASE INITIALIZATION
-    print("=== STARTING VINTED NOTIFICATIONS BOT ===")
+    logger.info("=== STARTING VINTED NOTIFICATIONS BOT ===")
     
     try:
         # Db check - works with both SQLite and PostgreSQL
-        print("Getting database connection...")
+        logger.info("Getting database connection...")
         conn, db_type = db.get_db_connection()
         conn.close()
         
-        print(f"Database type detected: {db_type}")
+        logger.info(f"Database type detected: {db_type}")
         logger.info(f"Using database type: {db_type}")
         
         # ALWAYS initialize database for PostgreSQL to ensure tables exist
         if db_type == 'postgresql':
-            print("PostgreSQL detected - forcing database initialization...")
+            logger.info("PostgreSQL detected - forcing database initialization...")
             logger.info("PostgreSQL detected - forcing database initialization...")
             db.create_or_update_db("initial_db.sql")
-            print("PostgreSQL database initialization completed")
+            logger.info("PostgreSQL database initialization completed")
             logger.info("PostgreSQL database initialization completed")
         else:
             # SQLite logic
             if not os.path.exists("./vinted_notifications.db"):
-                print("SQLite database file not found - creating...")
+                logger.info("SQLite database file not found - creating...")
                 logger.info("SQLite database file not found - creating...")
                 db.create_or_update_db("initial_db.sql")
                 logger.info("SQLite database created successfully")
             else:
-                print("SQLite database file exists - checking for migrations...")
+                logger.info("SQLite database file exists - checking for migrations...")
                 # Run migrations for existing database
                 current_version = db.get_parameter('version')
                 if current_version:
@@ -223,13 +223,13 @@ if __name__ == "__main__":
                     db.create_or_update_db("initial_db.sql")
                     logger.info("Database initialized successfully")
         
-        print("Database initialization phase completed")
+        logger.info("Database initialization phase completed")
         
     except Exception as e:
-        print(f"CRITICAL ERROR during database initialization: {e}")
+        logger.error(f"CRITICAL ERROR during database initialization: {e}")
         logger.error(f"CRITICAL ERROR during database initialization: {e}")
         import traceback
-        traceback.print_exc()
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
     # Plugin checker
@@ -244,22 +244,22 @@ if __name__ == "__main__":
 
     # 1. Create and start the scrape process
     # This process will scrape items and put them in the items_queue
-    print("[DEBUG] Creating scraper process...")
+    logger.info("[DEBUG] Creating scraper process...")
     query_refresh_delay_param = db.get_parameter("query_refresh_delay")
     current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
-    print(f"[DEBUG] Query refresh delay: {current_query_refresh_delay}")
+    logger.info(f"[DEBUG] Query refresh delay: {current_query_refresh_delay}")
     scraper_proc = multiprocessing.Process(target=scraper_process, args=(items_queue,))
-    print("[DEBUG] Starting scraper process...")
+    logger.info("[DEBUG] Starting scraper process...")
     scraper_proc.start()
-    print("[DEBUG] Scraper process started!")
+    logger.info("[DEBUG] Scraper process started!")
 
     # 2. Create the item extractor process
     # This process will extract items from the items_queue and put them in the new_items_queue
-    print("[DEBUG] Creating item extractor process...")
+    logger.info("[DEBUG] Creating item extractor process...")
     item_extractor_process = multiprocessing.Process(target=item_extractor, args=(items_queue, new_items_queue))
-    print("[DEBUG] Starting item extractor process...")
+    logger.info("[DEBUG] Starting item extractor process...")
     item_extractor_process.start()
-    print("[DEBUG] Item extractor process started!")
+    logger.info("[DEBUG] Item extractor process started!")
 
     # 3. Create the dispatcher process
     # This process will handle the new items and send them to the enabled services
