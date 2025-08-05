@@ -282,6 +282,11 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
         
         logger.info(f"Attempting to add item {id} to database (query_id: {query_id})")
         
+        # Check if item already exists in database
+        if db.is_item_in_db_by_id(id):
+            logger.info(f"Item {id} already exists in database, skipping...")
+            return False
+        
         # Convert price to float for DECIMAL compatibility
         try:
             price_decimal = float(price) if price is not None else 0.0
@@ -306,11 +311,13 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
             
         conn.commit()
         logger.info(f"Successfully added item {id} to database with price {price_decimal}")
+        return True
     except Exception as e:
         logger.error(f"Error adding item {id} to database: {e}")
         logger.error("Full traceback:", exc_info=True)
         if conn:
             conn.rollback()
+        return False
     finally:
         if conn:
             conn.close()
