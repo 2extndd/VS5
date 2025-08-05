@@ -14,7 +14,9 @@ scrape_process = None
 current_query_refresh_delay = None
 
 def scraper_process(items_queue):
+    print("[DEBUG] Scraper process function called!")
     logger.info("Scrape process started")
+    print(f"[DEBUG] Queue object received: {items_queue}")
 
     # Get the query refresh delay from the database
     query_refresh_delay_param = db.get_parameter("query_refresh_delay")
