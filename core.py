@@ -249,6 +249,7 @@ def clear_item_queue(items_queue, new_items_queue):
     Process items from the items_queue.
     This function is scheduled to run frequently.
     """
+    print(f"[DEBUG] clear_item_queue called - queue empty: {items_queue.empty()}")
     if not items_queue.empty():
         data, query_id = items_queue.get()
         for item in reversed(data):
@@ -287,11 +288,14 @@ def clear_item_queue(items_queue, new_items_queue):
                     logger.warning(f"Could not get thread_id for query {query_id}: {e}")
                 
                 # add the item to the queue with thread_id
+                print(f"[DEBUG] Adding item to queue: {item.title} (thread_id: {thread_id})")
                 new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id))
                 # new_items_queue.put((content, item.url, "Open Vinted", item.buy_url, "Open buy page"))
                 # Add the item to the db
+                print(f"[DEBUG] Adding item to database: {item.id}")
                 db.add_item_to_db(id=item.id, timestamp=item.raw_timestamp, price=item.price, title=item.title,
                                   photo_url=item.photo, query_id=query_id, currency=item.currency)
+                print(f"[DEBUG] Item successfully added to DB and queue")
 
 
 def check_version():
