@@ -276,15 +276,17 @@ def clear_item_queue(items_queue, new_items_queue):
             if True:  # Accept all items for now
                 logger.info(f"[DEBUG] Creating message for item {item.id}...")
                 try:
-                    # We create the message
-                    size_info = item.size_title if item.size_title else "Size not specified"
-                    content = configuration_values.MESSAGE.format(
-                        title=item.title,
-                        price=str(item.price) + " " + item.currency,
-                        size=size_info,
-                        brand=item.brand_title,
-                        image=None if item.photo is None else item.photo
-                    )
+                    # We create the message with conditional size display
+                    if item.size_title and item.size_title.strip():
+                        # Format message with size
+                        content = f"<b>{item.title}</b>\n<b>💶{str(item.price)} {item.currency}</b>\n⛓️ {item.size_title}\n{item.brand_title}"
+                    else:
+                        # Format message without size line
+                        content = f"<b>{item.title}</b>\n<b>💶{str(item.price)} {item.currency}</b>\n{item.brand_title}"
+                    
+                    # Add invisible image link if photo exists
+                    if item.photo:
+                        content += f"\n<a href='{item.photo}'>&#8205;</a>"
                     logger.info(f"[DEBUG] Message created successfully for item {item.id}")
                     
                     # Get thread_id for this query
