@@ -215,6 +215,9 @@ def update_last_timestamp(query_id, timestamp):
 
 
 def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="EUR"):
+    from logger import get_logger
+    logger = get_logger(__name__)
+    
     conn = None
     try:
         conn, db_type = get_db_connection()

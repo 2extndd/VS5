@@ -223,14 +223,20 @@ class requester:
             raise e
 
 # Создаем глобальный экземпляр для совместимости с существующим кодом
-requester_instance = None
+_global_requester_instance = None
 
 def get_requester_instance(debug=False):
     """Получение единственного экземпляра requester"""
-    global requester_instance
-    if requester_instance is None:
-        requester_instance = requester(debug=debug)
-    return requester_instance
+    global _global_requester_instance
+    if _global_requester_instance is None:
+        _global_requester_instance = requester(debug=debug)
+    return _global_requester_instance
 
-# Экспортируем класс для прямого использования
+# Создаем глобальный экземпляр для обратной совместимости
+requester_instance = get_requester_instance(debug=True)
+
+# Переопределяем requester чтобы он ссылался на экземпляр, а не класс
+requester = requester_instance
+
+# Экспортируем все для совместимости
 __all__ = ['requester', 'get_requester_instance']
