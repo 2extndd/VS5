@@ -1236,7 +1236,7 @@ def force_scan_all():
         def scan_thread():
             try:
                 logger.info("Starting forced scan of all queries...")
-                process_items(items_queue, new_items_queue)
+                process_items(items_queue)
                 logger.info("Forced scan completed!")
             except Exception as e:
                 logger.error(f"Error in forced scan: {e}")
