@@ -70,15 +70,26 @@ def index():
     items = db.get_items(limit=10)
     formatted_items = []
     for item in items:
-        formatted_items.append({
-            'id': item[0],
-            'title': item[1],
-            'price': item[2],
-            'currency': item[3],
-            'timestamp': datetime.fromtimestamp(item[4]).strftime('%Y-%m-%d %H:%M:%S'),
-            'query': item[5],
-            'photo_url': item[6]
-        })
+        try:
+            # Safe timestamp conversion
+            try:
+                timestamp_str = datetime.fromtimestamp(item[4]).strftime('%Y-%m-%d %H:%M:%S') if item[4] else 'Unknown'
+            except (ValueError, TypeError, OSError):
+                timestamp_str = 'Invalid timestamp'
+            
+            formatted_items.append({
+                'id': str(item[0]) if item[0] else 'Unknown',
+                'title': str(item[1]) if item[1] else 'Unknown title',
+                'price': float(item[2]) if item[2] is not None else 0.0,
+                'currency': str(item[3]) if item[3] else 'EUR',
+                'timestamp': timestamp_str,
+                'query': str(item[5]) if item[5] else 'Unknown query',
+                'photo_url': str(item[6]) if item[6] else ''
+            })
+        except Exception as e:
+            # Log the error and skip this item
+            logger.error(f"Error formatting item {item}: {e}")
+            continue
 
     # Get process status from the database
     telegram_running = db.get_parameter('telegram_process_running') == 'True'
@@ -94,15 +105,25 @@ def index():
     # Get the last found item
     last_item = db.get_last_found_item()
     if last_item:
-        stats['last_item'] = {
-            'id': last_item[0],
-            'title': last_item[1],
-            'price': last_item[2],
-            'currency': last_item[3],
-            'timestamp': datetime.fromtimestamp(last_item[4]).strftime('%Y-%m-%d %H:%M:%S'),
-            'query': last_item[5],
-            'photo_url': last_item[6]
-        }
+        try:
+            # Safe timestamp conversion for last item
+            try:
+                last_timestamp_str = datetime.fromtimestamp(last_item[4]).strftime('%Y-%m-%d %H:%M:%S') if last_item[4] else 'Unknown'
+            except (ValueError, TypeError, OSError):
+                last_timestamp_str = 'Invalid timestamp'
+                
+            stats['last_item'] = {
+                'id': str(last_item[0]) if last_item[0] else 'Unknown',
+                'title': str(last_item[1]) if last_item[1] else 'Unknown title',
+                'price': float(last_item[2]) if last_item[2] is not None else 0.0,
+                'currency': str(last_item[3]) if last_item[3] else 'EUR',
+                'timestamp': last_timestamp_str,
+                'query': str(last_item[5]) if last_item[5] else 'Unknown query',
+                'photo_url': str(last_item[6]) if last_item[6] else ''
+            }
+        except Exception as e:
+            logger.error(f"Error formatting last item {last_item}: {e}")
+            stats['last_item'] = None
     else:
         stats['last_item'] = None
 
