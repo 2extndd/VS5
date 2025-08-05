@@ -11,6 +11,17 @@ except ImportError:
     POSTGRES_AVAILABLE = False
 
 
+def safe_get_result(result, index=0):
+    """Safely get result from database query, handling different cursor types"""
+    if result:
+        try:
+            return result[index]
+        except (IndexError, KeyError, TypeError):
+            # If result is not subscriptable or wrong format, return the result itself
+            return result if index == 0 else None
+    return None
+
+
 def get_db_connection():
     """Get database connection (PostgreSQL if available and configured, otherwise SQLite)"""
     # Check if PostgreSQL is configured via environment variables
@@ -152,10 +163,8 @@ def is_item_in_db_by_id(id):
             cursor.execute("SELECT COUNT() FROM items WHERE item=?", (id,))
             
         result = cursor.fetchone()
-        if db_type == 'postgresql':
-            return result[0] > 0
-        else:
-            return result[0] > 0
+        count = safe_get_result(result, 0)
+        return count > 0 if count is not None else False
     except Exception:
         print_exc()
         return False
@@ -176,9 +185,7 @@ def get_last_timestamp(query_id):
             cursor.execute("SELECT last_item FROM queries WHERE id=?", (query_id,))
             
         result = cursor.fetchone()
-        if result:
-            return result[0]
-        return None
+        return safe_get_result(result, 0)
     except Exception:
         print_exc()
         return None
@@ -275,7 +282,8 @@ def is_query_in_db(processed_query):
             cursor.execute("SELECT COUNT() FROM queries WHERE query = ?", (processed_query,))
             
         result = cursor.fetchone()
-        return result[0] > 0
+        count = safe_get_result(result, 0)
+        return count > 0 if count is not None else False
     except Exception:
         print_exc()
         return False
@@ -366,7 +374,7 @@ def remove_query_from_db(query_number):
             query_result = cursor.fetchone()
             
             if query_result:
-                query_id = query_result[0]
+                query_id = safe_get_result(query_result, 0)
                 # Delete items associated with this query using query_id
                 cursor.execute("DELETE FROM items WHERE query_id=%s", (query_id,))
                 # Delete the query
@@ -520,7 +528,7 @@ def get_parameter(key):
             cursor.execute("SELECT value FROM parameters WHERE key=?", (key,))
             
         result = cursor.fetchone()
-        return result[0] if result else None
+        return safe_get_result(result, 0)
     except Exception:
         print_exc()
         return None
@@ -588,7 +596,7 @@ def get_items(limit=50, query=None):
                 cursor.execute("SELECT id FROM queries WHERE query=%s", (query,))
                 result = cursor.fetchone()
                 if result:
-                    query_id = result[0]
+                    query_id = safe_get_result(result, 0)
                     # Get items with the matching query_id
                     cursor.execute("""
                         SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url 
@@ -602,7 +610,7 @@ def get_items(limit=50, query=None):
                 cursor.execute("SELECT id FROM queries WHERE query=?", (query,))
                 result = cursor.fetchone()
                 if result:
-                    query_id = result[0]
+                    query_id = safe_get_result(result, 0)
                     # Get items with the matching query_id
                     cursor.execute(
                         "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC LIMIT ?",
