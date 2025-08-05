@@ -201,9 +201,10 @@ def process_items(queue):
     Returns:
         None
     """
-    logger.info(f"[DEBUG] process_items called - starting execution")
-    all_queries = db.get_queries()
-    logger.info(f"[DEBUG] Got {len(all_queries)} queries from database")
+    try:
+        logger.info(f"[DEBUG] process_items called - starting execution")
+        all_queries = db.get_queries()
+        logger.info(f"[DEBUG] Got {len(all_queries)} queries from database")
 
     # Initialize Vinted
     vinted = Vinted()
@@ -245,6 +246,11 @@ def process_items(queue):
         queue.put((data, query[0]))
         logger.info(f"[DEBUG] Successfully put items into queue (queue id: {id(queue)})")
         logger.info(f"Scraped {len(data)} items for query: {query[1]}")
+        
+    except Exception as e:
+        logger.error(f"[CRITICAL ERROR] process_items failed: {e}")
+        import traceback
+        logger.error(f"[CRITICAL ERROR] Traceback: {traceback.format_exc()}")
 
 
 def clear_item_queue(items_queue, new_items_queue):
