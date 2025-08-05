@@ -222,7 +222,7 @@ def is_item_in_db_by_id(id):
         if db_type == 'postgresql':
             cursor.execute("SELECT COUNT(*) FROM items WHERE item=%s", (id,))
         else:
-            cursor.execute("SELECT COUNT() FROM items WHERE item=?", (id,))
+            cursor.execute("SELECT COUNT(*) FROM items WHERE item=?", (id,))
             
         result = cursor.fetchone()
         count = safe_get_result(result, 0)
