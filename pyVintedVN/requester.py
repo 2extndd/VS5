@@ -1,109 +1,94 @@
-import requests
-import random
-from requests.exceptions import HTTPError
-import configuration_values
-import proxies
-import sys
-import os
-
-# Add the parent directory to sys.path to import logger
+import requests, os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import configuration_values as conf, proxies
 from logger import get_logger
 
 # Get logger for this module
 logger = get_logger(__name__)
 
+class requester:
+    def __init__(self, cookie=None, with_proxy=True, debug=False, headers=None):
+        self.debug = debug
+        if self.debug:
+            logger.info(f"[DEBUG] Initializing requester (proxy: {with_proxy}, debug: {debug})")
 
-class Requester:
-    """
-    A class for handling HTTP requests to Vinted.
+        self.MAX_RETRIES = 5
+        self.HEADER = headers if headers else conf.DEFAULT_HEADERS
+        
+        if self.debug:
+            logger.info(f"[DEBUG] Using headers: {self.HEADER}")
+            
+        logger.debug(f"Initializing requester (proxy: {with_proxy}, debug: {debug})")
+        logger.debug(f"Using headers: {self.HEADER}")
 
-    This class manages session headers, cookies, and provides methods for making
-    HTTP requests with retry logic for handling authentication issues.
-    """
-
-    def __init__(self, debug=False):
-        """
-        Initialize the Requester with default headers and session.
-
-        Sets up the request headers with a randomly selected User-Agent,
-        initializes the session, and configures default settings.
-
-        Args:
-            debug (bool, optional): Whether to print debug messages. Defaults to False.
-        """
-
-        self.HEADER = {
-            # Grabs a user agent from the configuration values
-            "User-Agent": random.choice(configuration_values.USER_AGENTS),
-            **configuration_values.DEFAULT_HEADERS,
-            "Host": "www.vinted.fr",
-            "Referer": "https://www.vinted.fr/",
-            "Origin": "https://www.vinted.fr",
-            "X-Requested-With": "XMLHttpRequest",
-            "DNT": "1",
-            "Upgrade-Insecure-Requests": "1"
-        }
-        self.VINTED_AUTH_URL = "https://www.vinted.fr/"
-        self.MAX_RETRIES = 3
         self.session = requests.Session()
         self.session.headers.update(self.HEADER)
-        self.debug = debug
 
+        # proxy
+        proxy_configured = proxies.configure_proxy(self.session) if with_proxy else False
         if self.debug:
-            logger.debug(f"Using User-Agent: {self.HEADER['User-Agent']}")
+            if proxy_configured:
+                logger.info(f"[DEBUG] Session initialized with proxy: {self.session.proxies}")
+            else:
+                logger.info(f"[DEBUG] Session initialized without proxy")
+                
+        if proxy_configured:
+            logger.debug(f"Session initialized with proxy: {self.session.proxies}")
+        else:
+            logger.debug("Session initialized without proxy")
 
-    def set_locale(self, locale):
-        """
-        Set the locale of the requester.
+        # If cookies are required, set them from the db or from the parameter
+        if cookie:
+            self.set_cookies(cookie)
+        else:
+            self.set_cookies()
 
-        Updates the authentication URL and headers to use the specified locale.
-
-        Args:
-            locale (str): The locale domain to use (e.g., 'www.vinted.fr', 'www.vinted.de')
-        """
-        self.VINTED_AUTH_URL = f"https://{locale}/"
-        self.HEADER = {
-            "User-Agent": random.choice(configuration_values.USER_AGENTS),
-            **configuration_values.DEFAULT_HEADERS,
-            "Host": f"{locale}",
-            "Referer": f"https://{locale}/",
-            "Origin": f"https://{locale}",
-            "X-Requested-With": "XMLHttpRequest",
-            "DNT": "1",
-            "Upgrade-Insecure-Requests": "1"
-        }
-        self.session.headers.update(self.HEADER)
+    def set_cookies(self, cookie=None):
+        logger.debug("Setting up cookies")
         if self.debug:
-            logger.debug(f"Locale set to {locale} with User-Agent: {self.HEADER['User-Agent']}")
+            logger.info("[DEBUG] Setting up cookies")
+            
+        import db
+        if cookie:
+            self.session.cookies.update(cookie)
+            if self.debug:
+                logger.info(f"[DEBUG] Using provided cookies: {cookie}")
+            logger.debug(f"Using provided cookies: {cookie}")
+        else:
+            cookie_db = db.get_parameter("cookie")
+            if cookie_db:
+                cookie = eval(cookie_db)
+                self.session.cookies.update(cookie)
+                if self.debug:
+                    logger.info(f"[DEBUG] Using database cookies: {cookie}")
+                logger.debug(f"Using database cookies: {cookie}")
+            else:
+                if self.debug:
+                    logger.info("[DEBUG] No cookies found in database")
+                logger.debug("No cookies found in database")
 
     def get(self, url, params=None):
-        """
-        Make a GET request with retry logic.
+        if self.debug:
+            logger.info(f"[DEBUG] Making GET request to: {url}")
+            if params:
+                logger.info(f"[DEBUG] Request params: {params}")
+                
+        logger.debug(f"Making GET request to: {url}")
+        if params:
+            logger.debug(f"Request params: {params}")
 
-        If a 401 status code is received, it will attempt to refresh cookies
-        and retry the request up to MAX_RETRIES times.
-
-        Args:
-            url (str): The URL to request
-            params (dict, optional): Query parameters for the request
-
-        Returns:
-            requests.Response: The response object if successful
-
-        Raises:
-            HTTPError: If the request fails after all retries
-        """
-
-        # Set a random proxy for this request
+        # proxy
         proxy_configured = proxies.configure_proxy(self.session)
         if self.debug:
             if proxy_configured:
-                logger.info(f"[DEBUG] Using proxy: {self.session.proxies}")
-                logger.debug(f"Using proxy: {self.session.proxies}")
+                logger.info(f"[DEBUG] Using proxy for request: {self.session.proxies}")
             else:
                 logger.info(f"[DEBUG] No proxy configured - direct connection")
-                logger.debug("No proxy configured - direct connection")
+        
+        if proxy_configured:
+            logger.debug(f"Using proxy for request: {self.session.proxies}")
+        else:
+            logger.debug("No proxy configured - direct connection")
 
         tried = 0
         new_session = False
@@ -153,67 +138,65 @@ class Requester:
                     return response
 
         # This should only happen if the loop exits without returning
-        raise HTTPError(f"Failed to get a valid response after {self.MAX_RETRIES} attempts")
+        return response
 
-    def post(self, url, params=None):
-        """
-        Make a POST request.
+    def post(self, url, data=None, json_data=None):
+        logger.debug(f"Making POST request to: {url}")
+        if self.debug:
+            logger.info(f"[DEBUG] Making POST request to: {url}")
+            if data:
+                logger.info(f"[DEBUG] POST data: {data}")
+            if json_data:
+                logger.info(f"[DEBUG] POST JSON: {json_data}")
+                
+        if data:
+            logger.debug(f"POST data: {data}")
+        if json_data:
+            logger.debug(f"POST JSON: {json_data}")
 
-        Args:
-            url (str): The URL to request
-            params (dict, optional): Parameters for the request
-
-        Returns:
-            requests.Response: The response object if successful
-
-        Raises:
-            HTTPError: If the request fails
-        """
-        # Set a random proxy for this request
+        # proxy
         proxy_configured = proxies.configure_proxy(self.session)
         if self.debug:
             if proxy_configured:
-                logger.info(f"[DEBUG] Using proxy: {self.session.proxies}")
-                logger.debug(f"Using proxy: {self.session.proxies}")
+                logger.info(f"[DEBUG] Using proxy for POST: {self.session.proxies}")
             else:
-                logger.info(f"[DEBUG] No proxy configured - direct connection")
-                logger.debug("No proxy configured - direct connection")
+                logger.info(f"[DEBUG] No proxy configured for POST - direct connection")
+                
+        if proxy_configured:
+            logger.debug(f"Using proxy for POST: {self.session.proxies}")
+        else:
+            logger.debug("No proxy configured for POST - direct connection")
 
-        response = self.session.post(url, params)
-        response.raise_for_status()
+        tried = 0
+        while tried < self.MAX_RETRIES:
+            tried += 1
+            if json_data:
+                response = self.session.post(url, json=json_data)
+            else:
+                response = self.session.post(url, data=data)
+                
+            if self.debug:
+                logger.info(f"[DEBUG] POST to {url} returned status {response.status_code}")
+                logger.info(f"[DEBUG] POST response headers: {dict(response.headers)}")
+                if response.text:
+                    logger.info(f"[DEBUG] POST response text (first 500 chars): {response.text[:500]}")
+                    
+            logger.debug(f"POST to {url} returned status {response.status_code}")
+            logger.debug(f"POST response headers: {dict(response.headers)}")
+            if response.text:
+                logger.debug(f"POST response text (first 500 chars): {response.text[:500]}")
+
+            if response.status_code in (401, 404) and tried < self.MAX_RETRIES:
+                logger.info(f"POST: Cookies invalid, retrying {tried}/{self.MAX_RETRIES}")
+                if self.debug:
+                    logger.info(f"[DEBUG] POST: Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
+                    logger.info(f"[DEBUG] POST: Current cookies: {dict(self.session.cookies)}")
+                logger.debug(f"POST: Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
+                logger.debug(f"POST: Current cookies: {dict(self.session.cookies)}")
+                self.set_cookies()
+            elif response.status_code == 200:
+                return response
+            elif tried == self.MAX_RETRIES:
+                return response
+
         return response
-
-    def set_cookies(self):
-        """
-        Reset and fetch new cookies for authentication.
-
-        Clears the current session cookies and makes a HEAD request to
-        the Vinted authentication URL to get new cookies.
-        """
-        self.session.cookies.clear_session_cookies()
-        try:
-            self.session.head(self.VINTED_AUTH_URL)
-            if self.debug:
-                logger.debug("Cookies set!")
-        except Exception as e:
-            if self.debug:
-                logger.error(f"There was an error fetching cookies for vinted", exc_info=True)
-
-
-    def update_cookies(self, cookies: dict):
-        """
-        Update the session cookies with the provided dictionary.
-
-        Args:
-            cookies (dict): Dictionary of cookies to update
-        """
-        self.session.cookies.update(cookies)
-        if self.debug:
-            logger.debug(f"Cookies manually updated ({len(cookies)} cookies received)")
-
-    # Alias for backward compatibility
-    setLocale = set_locale
-    setCookies = set_cookies
-
-# Singleton instance of the Requester class
-requester = Requester()
