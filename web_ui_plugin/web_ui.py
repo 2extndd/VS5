@@ -281,16 +281,40 @@ def items():
     formatted_items = []
 
     for item in items_data:
-        formatted_items.append({
-            'title': item[1],
-            'price': item[2],
-            'currency': item[3],
-            'timestamp': datetime.fromtimestamp(item[4]).strftime('%Y-%m-%d %H:%M:%S'),
-            'query': parse_qs(urlparse(item[5]).query).get('search_text', [None])[0] if
-            parse_qs(urlparse(item[5]).query).get('search_text', [None])[0] else item[5],
-            'url': f'https://www.vinted.fr/items/{item[0]}',
-            'photo_url': item[6]
-        })
+        try:
+            # Safe timestamp conversion
+            try:
+                timestamp_str = datetime.fromtimestamp(item[4]).strftime('%Y-%m-%d %H:%M:%S') if item[4] else 'Unknown'
+            except (ValueError, TypeError, OSError):
+                timestamp_str = 'Invalid timestamp'
+            
+            # Safe query parsing
+            try:
+                if item[5]:
+                    parsed_query = urlparse(item[5])
+                    query_params = parse_qs(parsed_query.query)
+                    search_text = query_params.get('search_text', [None])[0]
+                    query_display = search_text if search_text else item[5]
+                else:
+                    query_display = 'Unknown query'
+            except:
+                query_display = str(item[5]) if item[5] else 'Unknown query'
+            
+            formatted_items.append({
+                'title': str(item[1]) if item[1] else 'Unknown title',
+                'price': float(item[2]) if item[2] is not None else 0.0,
+                'currency': str(item[3]) if item[3] else 'EUR',
+                'timestamp': timestamp_str,
+                'query': query_display,
+                'url': f'https://www.vinted.fr/items/{item[0]}',
+                'photo_url': str(item[6]) if item[6] else ''
+            })
+        except Exception as e:
+            # Log the error and skip this item
+            from logger import get_logger
+            logger = get_logger(__name__)
+            logger.error(f"Error formatting item {item}: {e}")
+            continue
 
     # Get queries for filter dropdown
     queries = db.get_queries()
