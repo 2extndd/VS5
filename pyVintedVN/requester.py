@@ -224,3 +224,6 @@ class requester:
                 return response
 
         return response# Force cache refresh
+
+# Singleton instance of the requester class for backward compatibility
+requester = requester()
