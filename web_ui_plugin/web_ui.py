@@ -309,7 +309,11 @@ def index():
         try:
             # Safe timestamp conversion
             try:
-                timestamp_str = datetime.fromtimestamp(item[4]).strftime('%Y-%m-%d %H:%M:%S') if item[4] else 'Unknown'
+                if item[4]:
+                    timestamp_val = float(item[4])  # Convert Decimal to float
+                    timestamp_str = datetime.fromtimestamp(timestamp_val).strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    timestamp_str = 'Unknown'
             except (ValueError, TypeError, OSError):
                 timestamp_str = 'Invalid timestamp'
             
@@ -344,7 +348,11 @@ def index():
         try:
             # Safe timestamp conversion for last item
             try:
-                last_timestamp_str = datetime.fromtimestamp(last_item[4]).strftime('%Y-%m-%d %H:%M:%S') if last_item[4] else 'Unknown'
+                if last_item[4]:
+                    timestamp_val = float(last_item[4])  # Convert Decimal to float
+                    last_timestamp_str = datetime.fromtimestamp(timestamp_val).strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    last_timestamp_str = 'Unknown'
             except (ValueError, TypeError, OSError):
                 last_timestamp_str = 'Invalid timestamp'
                 
@@ -541,7 +549,11 @@ def items():
         try:
             # Safe timestamp conversion
             try:
-                timestamp_str = datetime.fromtimestamp(item[4]).strftime('%Y-%m-%d %H:%M:%S') if item[4] else 'Unknown'
+                if item[4]:
+                    timestamp_val = float(item[4])  # Convert Decimal to float
+                    timestamp_str = datetime.fromtimestamp(timestamp_val).strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    timestamp_str = 'Unknown'
             except (ValueError, TypeError, OSError):
                 timestamp_str = 'Invalid timestamp'
             
