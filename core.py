@@ -206,6 +206,11 @@ def process_items(queue):
 
     # Initialize Vinted
     vinted = Vinted()
+    
+    # Enable debug mode for troubleshooting
+    from pyVintedVN.requester import requester
+    requester.debug = True
+    logger.info("Enabled debug mode for Vinted requests")
 
     # Get the number of items per query from the database
     items_per_query_param = db.get_parameter("items_per_query")
