@@ -94,16 +94,19 @@ def dispatcher_function(input_queue, rss_queue, telegram_queue):
 
 def telegram_bot_process(queue):
     logger.info("Telegram bot process started")
-    import asyncio
     try:
         # Import LeRobot
         from telegram_bot_plugin.telegram_bot import LeRobot
-        # The bot will run with app.run_polling() which is already in the module
-        asyncio.run(LeRobot(queue))
+        # Create and start the bot - LeRobot handles its own asyncio loop
+        logger.info("Creating LeRobot instance...")
+        bot = LeRobot(queue)
+        logger.info("LeRobot created successfully and should be running!")
     except (KeyboardInterrupt, SystemExit):
         logger.info("Telegram bot process stopped")
     except Exception as e:
         logger.error(f"Error in telegram bot process: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Telegram bot traceback: {traceback.format_exc()}")
 
 
 def check_refresh_delay(items_queue):

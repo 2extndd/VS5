@@ -966,6 +966,51 @@ def test_telegram():
         })
 
 
+@app.route('/force_telegram_bot')
+def force_telegram_bot():
+    """Force start Telegram bot manually"""
+    try:
+        import threading
+        import queue
+        
+        # Create test queue
+        test_queue = queue.Queue()
+        
+        # Add test item to queue
+        test_content = "🧪 <b>ПРИНУДИТЕЛЬНЫЙ ЗАПУСК TELEGRAM БОТА</b>\n\nТест отправки через очередь"
+        test_queue.put((test_content, "https://vinted.de", "Open Vinted", None, None, None, None))
+        
+        def start_telegram_bot():
+            try:
+                logger.info("Force starting Telegram bot...")
+                from telegram_bot_plugin.telegram_bot import LeRobot
+                
+                # Start bot with test queue
+                bot = LeRobot(test_queue)
+                logger.info("Telegram bot force started!")
+                
+            except Exception as e:
+                logger.error(f"Error force starting Telegram bot: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Start in thread
+        telegram_thread = threading.Thread(target=start_telegram_bot, daemon=True)
+        telegram_thread.start()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Telegram bot force started in thread',
+            'queue_size': test_queue.qsize()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error force starting Telegram bot: {e}'
+        })
+
+
 def web_ui_process():
     logger.info("Web UI process started")
     
