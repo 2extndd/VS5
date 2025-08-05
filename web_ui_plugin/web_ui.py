@@ -1172,7 +1172,7 @@ def set_thread_ids():
             
             # Find matching thread_id based on query name
             thread_id = None
-            query_display = query_name or query_url
+            query_display = str(query_name or query_url)  # Convert to string for PostgreSQL Decimal
             
             for brand, tid in thread_mappings.items():
                 if brand.lower() in query_display.lower():
