@@ -191,8 +191,49 @@ def force_start():
         def test_run():
             try:
                 logger.info("🚀 Тестовый запуск process_items...")
-                result = core.process_items(test_queue)
-                return f"SUCCESS: {result}"
+                
+                # Прямой тест поиска вещей БЕЗ ОЧЕРЕДИ
+                import db
+                all_queries = db.get_queries()
+                logger.info(f"Found {len(all_queries)} queries in database")
+                
+                if len(all_queries) == 0:
+                    return "ERROR: No queries in database"
+                
+                # Тестируем первый запрос
+                from pyVintedVN.vinted import Vinted
+                vinted = Vinted()
+                
+                first_query = all_queries[0]
+                logger.info(f"Testing query: {first_query[1][:50]}...")
+                
+                try:
+                    items = vinted.items.search(first_query[1], nbr_items=2)
+                    logger.info(f"Search returned {len(items)} items")
+                    
+                    if len(items) > 0:
+                        first_item = items[0]
+                        logger.info(f"First item: {first_item.title} - {first_item.price}")
+                        
+                        # Пытаемся сохранить в базу напрямую
+                        db.add_item_to_db(
+                            id=first_item.id,
+                            title=first_item.title,
+                            query_id=first_query[0],
+                            price=first_item.price,
+                            timestamp=first_item.raw_timestamp,
+                            photo_url=first_item.photo,
+                            currency=first_item.currency
+                        )
+                        
+                        return f"SUCCESS: Found {len(items)} items, saved first item: {first_item.title}"
+                    else:
+                        return "SUCCESS: No items found in search"
+                        
+                except Exception as search_error:
+                    import traceback
+                    return f"SEARCH_ERROR: {search_error}\\n{traceback.format_exc()}"
+                
             except Exception as e:
                 import traceback
                 return f"ERROR: {e}\\n{traceback.format_exc()}"
