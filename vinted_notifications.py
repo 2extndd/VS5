@@ -255,12 +255,19 @@ if __name__ == "__main__":
     monitor_scheduler.start()
     logger.info("[DEBUG] Monitor scheduler started!")
 
-    # Start Telegram bot in thread (MISSING IN SINGLE-PROCESS!)
-    logger.info("[DEBUG] Starting Telegram bot...")
-    import threading
-    telegram_thread = threading.Thread(target=telegram_bot_process, args=(new_items_queue,), daemon=True)
-    telegram_thread.start()
-    logger.info("[DEBUG] Telegram bot started in thread!")
+    # Start SIMPLE Telegram sender instead of complex LeRobot
+    logger.info("[DEBUG] Starting SIMPLE Telegram sender...")
+    try:
+        from simple_telegram_worker import start_simple_telegram_sender
+        telegram_sender = start_simple_telegram_sender(new_items_queue)
+        if telegram_sender:
+            logger.info("[DEBUG] ✅ SIMPLE Telegram sender started successfully!")
+        else:
+            logger.error("[DEBUG] ❌ Failed to start SIMPLE Telegram sender")
+    except Exception as e:
+        logger.error(f"[DEBUG] ❌ Error starting SIMPLE Telegram sender: {e}")
+        import traceback
+        logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
 
     # Start Web UI in the main process
     logger.info("[DEBUG] Starting Web UI in main process...")
