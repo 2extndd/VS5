@@ -201,8 +201,9 @@ def process_items(queue):
     Returns:
         None
     """
-
+    logger.info(f"[DEBUG] process_items called - starting execution")
     all_queries = db.get_queries()
+    logger.info(f"[DEBUG] Got {len(all_queries)} queries from database")
 
     # Initialize Vinted
     vinted = Vinted()
