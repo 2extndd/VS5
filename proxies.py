@@ -140,9 +140,17 @@ def get_random_proxy() -> Optional[str]:
     proxy_list = db.get_parameter("proxy_list")
     logger.info(f"[DEBUG] proxy_list from DB: {proxy_list}")
     if proxy_list:
-        # If PROXY_LIST is a string with multiple proxies separated by semicolons
-        all_proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
-        logger.info(f"[DEBUG] Parsed {len(all_proxies)} proxies from proxy_list")
+        try:
+            # If PROXY_LIST is stored as a Python list string representation, eval it
+            if proxy_list.startswith('[') and proxy_list.endswith(']'):
+                all_proxies = eval(proxy_list)
+            else:
+                # If PROXY_LIST is a string with multiple proxies separated by semicolons
+                all_proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
+            logger.info(f"[DEBUG] Parsed {len(all_proxies)} proxies from proxy_list")
+        except Exception as e:
+            logger.error(f"[DEBUG] Error parsing proxy_list: {e}")
+            all_proxies = []
 
     # Check if PROXY_LIST_LINK is configured in the database
     proxy_list_link = db.get_parameter("proxy_list_link")
