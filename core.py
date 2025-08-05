@@ -206,47 +206,47 @@ def process_items(queue):
         all_queries = db.get_queries()
         logger.info(f"[DEBUG] Got {len(all_queries)} queries from database")
 
-    # Initialize Vinted
-    vinted = Vinted()
-    
-    # Enable debug mode for troubleshooting
-    from pyVintedVN.requester import requester
-    requester.debug = True
-    logger.info("Enabled debug mode for Vinted requests")
+        # Initialize Vinted
+        vinted = Vinted()
+        
+        # Enable debug mode for troubleshooting
+        from pyVintedVN.requester import requester
+        requester.debug = True
+        logger.info("Enabled debug mode for Vinted requests")
 
-    # Get the number of items per query from the database
-    items_per_query_param = db.get_parameter("items_per_query")
-    items_per_query = int(items_per_query_param) if items_per_query_param else 20
+        # Get the number of items per query from the database
+        items_per_query_param = db.get_parameter("items_per_query")
+        items_per_query = int(items_per_query_param) if items_per_query_param else 20
 
-    # for each keyword we parse data
-    for query in all_queries:
-        logger.info(f"[DEBUG] Calling vinted.items.search for query: {query[1]}")
-        logger.info(f"[DEBUG] vinted.items type: {type(vinted.items)}")
-        logger.info(f"[DEBUG] vinted.items.search method: {vinted.items.search}")
-        all_items = vinted.items.search(query[1], nbr_items=items_per_query)
-        
-        # Debug: log info about found items
-        logger.info(f"[DEBUG] *** CORE.PY *** Found {len(all_items)} total items for query")
-        logger.info(f"[DEBUG] all_items type: {type(all_items)}")
-        if all_items:
-            first_item = all_items[0]
-            logger.info(f"[DEBUG] First item type: {type(first_item)}")
-            logger.info(f"[DEBUG] First item: {first_item}")
-            try:
-                logger.info(f"[DEBUG] First item age: {(first_item.created_at_ts).isoformat()}")
-                logger.info(f"[DEBUG] Item is_new_item(60): {first_item.is_new_item(60)}")
-            except Exception as e:
-                logger.info(f"[DEBUG] Error accessing item attributes: {e}")
-        else:
-            logger.info(f"[DEBUG] *** NO ITEMS RETURNED FROM SEARCH ***")
-        
-        # Temporarily disable time filter for testing - accept all items
-        data = all_items  # [item for item in all_items if item.is_new_item(1440)]
-        logger.info(f"[DEBUG] Putting {len(data)} items into queue for query_id {query[0]} (queue id: {id(queue)})")
-        queue.put((data, query[0]))
-        logger.info(f"[DEBUG] Successfully put items into queue (queue id: {id(queue)})")
-        logger.info(f"Scraped {len(data)} items for query: {query[1]}")
-        
+        # for each keyword we parse data
+        for query in all_queries:
+            logger.info(f"[DEBUG] Calling vinted.items.search for query: {query[1]}")
+            logger.info(f"[DEBUG] vinted.items type: {type(vinted.items)}")
+            logger.info(f"[DEBUG] vinted.items.search method: {vinted.items.search}")
+            all_items = vinted.items.search(query[1], nbr_items=items_per_query)
+            
+            # Debug: log info about found items
+            logger.info(f"[DEBUG] *** CORE.PY *** Found {len(all_items)} total items for query")
+            logger.info(f"[DEBUG] all_items type: {type(all_items)}")
+            if all_items:
+                first_item = all_items[0]
+                logger.info(f"[DEBUG] First item type: {type(first_item)}")
+                logger.info(f"[DEBUG] First item: {first_item}")
+                try:
+                    logger.info(f"[DEBUG] First item age: {(first_item.created_at_ts).isoformat()}")
+                    logger.info(f"[DEBUG] Item is_new_item(60): {first_item.is_new_item(60)}")
+                except Exception as e:
+                    logger.info(f"[DEBUG] Error accessing item attributes: {e}")
+            else:
+                logger.info(f"[DEBUG] *** NO ITEMS RETURNED FROM SEARCH ***")
+            
+            # Temporarily disable time filter for testing - accept all items
+            data = all_items  # [item for item in all_items if item.is_new_item(1440)]
+            logger.info(f"[DEBUG] Putting {len(data)} items into queue for query_id {query[0]} (queue id: {id(queue)})")
+            queue.put((data, query[0]))
+            logger.info(f"[DEBUG] Successfully put items into queue (queue id: {id(queue)})")
+            logger.info(f"Scraped {len(data)} items for query: {query[1]}")
+            
     except Exception as e:
         logger.error(f"[CRITICAL ERROR] process_items failed: {e}")
         import traceback
