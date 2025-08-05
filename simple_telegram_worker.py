@@ -23,34 +23,64 @@ class SimpleTelegramSender:
         logger.info("SimpleTelegramSender initialized")
         
     def send_message(self, content, url=None, photo_url=None, thread_id=None):
-        """Send message to Telegram using HTTP API with thread support"""
+        """Send message to Telegram using HTTP API with thread support and photo attachments"""
         try:
-            api_url = f"https://api.telegram.org/bot{self.token}/sendMessage"
-            
-            # Prepare message data
-            data = {
-                'chat_id': self.chat_id,
-                'text': content,
-                'parse_mode': 'HTML'
-            }
-            
-            # Add thread_id if provided (for topics/forums)
-            if thread_id:
-                data['message_thread_id'] = int(thread_id)
-                logger.info(f"📍 Sending to thread_id: {thread_id}")
-            else:
-                logger.info("📍 Sending to main chat (no thread_id)")
-            
-            # Add inline keyboard if URL provided
-            if url:
-                keyboard = {
-                    'inline_keyboard': [[
-                        {'text': 'Open Vinted', 'url': url}
-                    ]]
+            # If photo_url is provided, send as photo with caption
+            if photo_url:
+                api_url = f"https://api.telegram.org/bot{self.token}/sendPhoto"
+                
+                # Prepare photo data
+                data = {
+                    'chat_id': self.chat_id,
+                    'photo': photo_url,
+                    'caption': content,
+                    'parse_mode': 'HTML'
                 }
-                data['reply_markup'] = keyboard
+                
+                # Add thread_id if provided (for topics/forums)
+                if thread_id:
+                    data['message_thread_id'] = int(thread_id)
+                    logger.info(f"📍 Sending PHOTO to thread_id: {thread_id}")
+                else:
+                    logger.info("📍 Sending PHOTO to main chat (no thread_id)")
+                
+                # Add inline keyboard if URL provided
+                if url:
+                    keyboard = {
+                        'inline_keyboard': [[
+                            {'text': 'Open Vinted', 'url': url}
+                        ]]
+                    }
+                    data['reply_markup'] = keyboard
+                
+            else:
+                # Send as regular text message
+                api_url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+                
+                # Prepare message data
+                data = {
+                    'chat_id': self.chat_id,
+                    'text': content,
+                    'parse_mode': 'HTML'
+                }
+                
+                # Add thread_id if provided (for topics/forums)
+                if thread_id:
+                    data['message_thread_id'] = int(thread_id)
+                    logger.info(f"📍 Sending TEXT to thread_id: {thread_id}")
+                else:
+                    logger.info("📍 Sending TEXT to main chat (no thread_id)")
+                
+                # Add inline keyboard if URL provided
+                if url:
+                    keyboard = {
+                        'inline_keyboard': [[
+                            {'text': 'Open Vinted', 'url': url}
+                        ]]
+                    }
+                    data['reply_markup'] = keyboard
             
-            # Send message
+            # Send message (photo or text)
             response = requests.post(api_url, json=data, timeout=10)
             
             if response.status_code == 200:

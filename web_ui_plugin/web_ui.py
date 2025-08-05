@@ -1156,11 +1156,13 @@ def send_items_to_telegram():
 def set_thread_ids():
     """Quick setup of thread_ids for queries"""
     try:
-        # Example thread_ids (user should modify these)
+        # Thread mappings based on real query names from Railway
         thread_mappings = {
-            'MM 6': '123',      # Замени на реальный thread_id для MM6
-            'Prada': '456',     # Замени на реальный thread_id для Prada
-            'D&G': '789',       # Замени на реальный thread_id для D&G
+            'MM': '100',        # Для всех MM запросов (MM 1-7)
+            'Prada': '200',     # Для всех Prada запросов (Prada 1-4)
+            'D&G': '300',       # Для всех D&G запросов (D&G 1-4)
+            'GGL': '400',       # Для GGL запроса
+            'Rick Owens': '500', # Для Rick Owens запроса
         }
         
         # Get all queries
@@ -1201,6 +1203,224 @@ def set_thread_ids():
         return jsonify({
             'status': 'error',
             'message': f'Error setting thread_ids: {e}'
+        })
+
+
+@app.route('/force_scan_all', methods=['POST'])
+def force_scan_all():
+    """Force scan all queries immediately"""
+    try:
+        import threading
+        from core import process_items
+        import queue
+        
+        # Create queues for the scan
+        items_queue = queue.Queue()
+        new_items_queue = queue.Queue()
+        
+        logger.info("🚀 ПРИНУДИТЕЛЬНОЕ СКАНИРОВАНИЕ ВСЕХ ФИЛЬТРОВ ЗАПУЩЕНО!")
+        
+        # Run process_items in a thread to avoid blocking the web request
+        def scan_thread():
+            try:
+                logger.info("Starting forced scan of all queries...")
+                process_items(items_queue, new_items_queue)
+                logger.info("Forced scan completed!")
+            except Exception as e:
+                logger.error(f"Error in forced scan: {e}")
+        
+        # Start scan in background thread
+        scan_thread_obj = threading.Thread(target=scan_thread, daemon=True)
+        scan_thread_obj.start()
+        
+        # Get current stats for response
+        queries = db.get_queries()
+        query_count = len(queries)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Force scan started for {query_count} queries',
+            'queries_scanned': query_count,
+            'note': 'Scan is running in background. Check dashboard in a few moments for updated results.'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in force_scan_all: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error starting force scan: {e}'
+        })
+
+
+@app.route('/system_analysis')
+def system_analysis():
+    """Analyze system performance and scanning frequency"""
+    try:
+        # Get current configuration
+        query_refresh_delay = db.get_parameter("query_refresh_delay") or "30"
+        items_per_query = db.get_parameter("items_per_query") or "20"
+        
+        # Get query count
+        queries = db.get_queries()
+        query_count = len(queries)
+        
+        # Calculate scanning frequency
+        refresh_delay_seconds = int(query_refresh_delay)
+        scans_per_minute = 60 / refresh_delay_seconds
+        scans_per_hour = scans_per_minute * 60
+        
+        # Calculate Vinted API requests
+        requests_per_scan = query_count  # One request per query per scan
+        requests_per_hour = requests_per_scan * scans_per_hour
+        
+        # Estimate items processed
+        items_per_scan = query_count * int(items_per_query)
+        items_per_hour = items_per_scan * scans_per_hour
+        
+        # Get recent activity stats
+        total_items = db.get_total_items_count()
+        items_today = db.get_items_per_day()
+        
+        analysis = {
+            'configuration': {
+                'query_refresh_delay': f"{refresh_delay_seconds} seconds",
+                'items_per_query': items_per_query,
+                'total_queries': query_count
+            },
+            'scanning_frequency': {
+                'scans_per_minute': round(scans_per_minute, 2),
+                'scans_per_hour': round(scans_per_hour, 2),
+                'scans_per_day': round(scans_per_hour * 24, 2)
+            },
+            'api_load': {
+                'requests_per_scan': requests_per_scan,
+                'requests_per_hour': round(requests_per_hour, 2),
+                'requests_per_day': round(requests_per_hour * 24, 2)
+            },
+            'item_processing': {
+                'items_per_scan_max': items_per_scan,
+                'items_per_hour_max': round(items_per_hour, 2),
+                'items_per_day_max': round(items_per_hour * 24, 2)
+            },
+            'actual_stats': {
+                'total_items_found': total_items,
+                'items_today': items_today,
+                'average_items_per_query': round(total_items / query_count, 2) if query_count > 0 else 0
+            },
+            'recommendations': []
+        }
+        
+        # Add recommendations based on analysis
+        if requests_per_hour > 1000:
+            analysis['recommendations'].append({
+                'type': 'warning',
+                'message': f'High API load: {requests_per_hour:.0f} requests/hour. Consider increasing refresh delay.'
+            })
+        
+        if refresh_delay_seconds < 60:
+            analysis['recommendations'].append({
+                'type': 'info',
+                'message': 'Fast scanning (< 1 minute). Good for real-time monitoring but increases API load.'
+            })
+        
+        if query_count > 20:
+            analysis['recommendations'].append({
+                'type': 'warning',
+                'message': f'Many queries ({query_count}). Consider consolidating similar searches.'
+            })
+        
+        if not analysis['recommendations']:
+            analysis['recommendations'].append({
+                'type': 'success',
+                'message': 'System configuration looks optimal!'
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'analysis': analysis
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in system_analysis: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error analyzing system: {e}'
+        })
+
+
+@app.route('/telegram_commands')
+def telegram_commands():
+    """List all supported Telegram bot commands"""
+    try:
+        commands = [
+            {
+                'command': '/hello',
+                'description': 'Приветствие от бота',
+                'usage': '/hello',
+                'example': '/hello'
+            },
+            {
+                'command': '/app',
+                'description': 'Открыть веб-интерфейс приложения',
+                'usage': '/app',
+                'example': '/app'
+            },
+            {
+                'command': '/add_query',
+                'description': 'Добавить новый запрос для мониторинга',
+                'usage': '/add_query [name=]<vinted_url>',
+                'example': '/add_query https://www.vinted.de/catalog?brand_ids=212366\n/add_query MM 6=https://www.vinted.de/catalog?brand_ids=212366'
+            },
+            {
+                'command': '/remove_query',
+                'description': 'Удалить запрос по номеру (или все запросы)',
+                'usage': '/remove_query <number|all>',
+                'example': '/remove_query 1\n/remove_query all'
+            },
+            {
+                'command': '/queries',
+                'description': 'Показать все текущие запросы',
+                'usage': '/queries',
+                'example': '/queries'
+            },
+            {
+                'command': '/allowlist',
+                'description': 'Показать список разрешенных стран',
+                'usage': '/allowlist',
+                'example': '/allowlist'
+            },
+            {
+                'command': '/clear_allowlist',
+                'description': 'Очистить список разрешенных стран (разрешить все)',
+                'usage': '/clear_allowlist',
+                'example': '/clear_allowlist'
+            },
+            {
+                'command': '/add_country',
+                'description': 'Добавить страну в allowlist',
+                'usage': '/add_country <country_code>',
+                'example': '/add_country DE\n/add_country Germany'
+            },
+            {
+                'command': '/remove_country',
+                'description': 'Удалить страну из allowlist',
+                'usage': '/remove_country <country_code>',
+                'example': '/remove_country DE\n/remove_country Germany'
+            }
+        ]
+        
+        return jsonify({
+            'status': 'success',
+            'commands': commands,
+            'total_commands': len(commands),
+            'note': 'Все команды работают только в приватном чате с ботом или в группе где бот является администратором'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in telegram_commands: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error getting telegram commands: {e}'
         })
 
 

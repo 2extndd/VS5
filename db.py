@@ -820,26 +820,26 @@ def get_items_per_day():
 
 
 def update_query_last_found(query_id, timestamp):
-    """Update the last_found timestamp for a query"""
+    """Update the last_item timestamp for a query (fixed field name)"""
     conn = None
     try:
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
         
-        # Update the last_found field for the query
+        # Update the last_item field for the query (correct field name)
         if db_type == 'postgresql':
             cursor.execute("""
                 UPDATE queries 
-                SET last_found = %s 
+                SET last_item = %s 
                 WHERE id = %s
             """, (timestamp, query_id))
         else:
             cursor.execute(
-                "UPDATE queries SET last_found = ? WHERE id = ?",
+                "UPDATE queries SET last_item = ? WHERE id = ?",
                 (timestamp, query_id))
         
         conn.commit()
-        logger.info(f"Updated last_found for query {query_id} to timestamp {timestamp}")
+        logger.info(f"Updated last_item for query {query_id} to timestamp {timestamp}")
         return True
         
     except Exception as e:

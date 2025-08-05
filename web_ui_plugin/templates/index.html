@@ -90,9 +90,14 @@
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="card">
-            <div class="card-header d-flex align-items-center">
-                <i class="bi bi-speedometer2 me-2 text-info"></i>
-                <h5 class="card-title mb-0">Process Status</h5>
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-speedometer2 me-2 text-info"></i>
+                    <h5 class="card-title mb-0">Process Status</h5>
+                </div>
+                <button class="btn btn-primary btn-sm" id="forceScanBtn">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Force Scan All
+                </button>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -416,6 +421,62 @@
 
         listViewBtn.addEventListener('click', function () {
             setActiveView('list');
+        });
+
+        // Force Scan Button
+        document.getElementById('forceScanBtn').addEventListener('click', function() {
+            const btn = this;
+            const originalText = btn.innerHTML;
+            
+            // Show loading state
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise spinner-border spinner-border-sm me-1"></i>Scanning...';
+            btn.disabled = true;
+            
+            // Call force scan endpoint
+            fetch('/force_scan_all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Show success message
+                    btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Success!';
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-success');
+                    
+                    // Show notification
+                    alert('Force scan completed! ' + data.message);
+                    
+                    // Reload page to update stats
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    btn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Error';
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-danger');
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                btn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Error';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-danger');
+                alert('Network error occurred');
+            })
+            .finally(() => {
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    btn.classList.remove('btn-success', 'btn-danger');
+                    btn.classList.add('btn-primary');
+                }, 3000);
+            });
         });
     });
 </script>
