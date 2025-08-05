@@ -277,9 +277,11 @@ def clear_item_queue(items_queue, new_items_queue):
                 logger.info(f"[DEBUG] Creating message for item {item.id}...")
                 try:
                     # We create the message
+                    size_info = item.size_title if item.size_title else "Size not specified"
                     content = configuration_values.MESSAGE.format(
                         title=item.title,
                         price=str(item.price) + " " + item.currency,
+                        size=size_info,
                         brand=item.brand_title,
                         image=None if item.photo is None else item.photo
                     )

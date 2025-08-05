@@ -1212,7 +1212,7 @@ def send_items_to_telegram():
                 
                 # Create message content with query name if available
                 query_display = query_name if query_name else query_url[:50] + "..."
-                content = f"🛍️ <b>{title}</b>\\n\\n💰 Цена: {price} {currency}\\n📂 Запрос: {query_display}"
+                content = f"🆕 {title}\\n💶 {price} {currency} (Size N/A)\\n🛍️ Brand : N/A"
                 
                 # Send to Telegram with thread_id support
                 api_url = f"https://api.telegram.org/bot{token}/sendMessage"

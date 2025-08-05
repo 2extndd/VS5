@@ -1,7 +1,7 @@
 #### NOTIFICATION ####
 MESSAGE = '''\
-🆕 Title : {title}
-💶 Price : {price}
+🆕 {title}
+💶 {price} ({size})
 🛍️ Brand : {brand}
 <a href='{image}'>&#8205;</a>
 '''
