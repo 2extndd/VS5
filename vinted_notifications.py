@@ -121,8 +121,12 @@ def plugin_checker():
     rss_enabled = db.get_parameter('rss_enabled') or 'False'
     logger.info("RSS enabled: {}".format(rss_enabled))
 
-    # Reset process status at startup
-    db.set_parameter('telegram_process_running', telegram_enabled)
+    # Force Telegram bot to be enabled by default (Railway production environment)
+    logger.info("Forcing Telegram bot to be enabled for production")
+    db.set_parameter('telegram_enabled', 'True')
+    db.set_parameter('telegram_process_running', 'True')
+    
+    # Keep RSS as configured
     db.set_parameter('rss_process_running', rss_enabled)
 
 
