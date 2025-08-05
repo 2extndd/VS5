@@ -244,15 +244,22 @@ if __name__ == "__main__":
 
     # 1. Create and start the scrape process
     # This process will scrape items and put them in the items_queue
+    print("[DEBUG] Creating scraper process...")
     query_refresh_delay_param = db.get_parameter("query_refresh_delay")
     current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
-    scrape_process = multiprocessing.Process(target=scraper_process, args=(items_queue,))
-    scrape_process.start()
+    print(f"[DEBUG] Query refresh delay: {current_query_refresh_delay}")
+    scraper_proc = multiprocessing.Process(target=scraper_process, args=(items_queue,))
+    print("[DEBUG] Starting scraper process...")
+    scraper_proc.start()
+    print("[DEBUG] Scraper process started!")
 
     # 2. Create the item extractor process
     # This process will extract items from the items_queue and put them in the new_items_queue
+    print("[DEBUG] Creating item extractor process...")
     item_extractor_process = multiprocessing.Process(target=item_extractor, args=(items_queue, new_items_queue))
+    print("[DEBUG] Starting item extractor process...")
     item_extractor_process.start()
+    print("[DEBUG] Item extractor process started!")
 
     # 3. Create the dispatcher process
     # This process will handle the new items and send them to the enabled services
