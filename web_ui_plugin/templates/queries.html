@@ -81,10 +81,11 @@
                     <table class="table table-hover mb-0">
                         <thead>
                         <tr>
-                            <th>#</th>
+                            <th class="d-none d-md-table-cell">#</th>
                             <th>Query</th>
-                            <th>Thread ID</th>
-                            <th>Last Found Item</th>
+                            <th class="d-none d-lg-table-cell">Thread ID</th>
+                            <th class="d-none d-md-table-cell">Last Found Item</th>
+                            <th class="text-center">Items</th>
                             <th>Actions</th>
                         </tr>
                         </thead>
@@ -93,16 +94,20 @@
                         
                         <tr {% if loop.index > 1 and (query.thread_id|string) != (queries[loop.index0-1].thread_id|string) %}style="border-top: 3px solid #0d6efd; padding-top: 8px;"{% endif %} 
                             {% if query.thread_id %}class="table-light"{% endif %}>
-                            <td>{{ query.id }}</td>
+                            <td class="d-none d-md-table-cell">{{ query.id }}</td>
                             <td>
                                 <a href="{{ query.query }}" target="_blank" class="text-decoration-none">
                                     <i class="bi bi-box-arrow-up-right me-1"></i>{{ query.display }}
                                 </a>
+                                <!-- Show thread ID and items count on mobile as small badges -->
+                                <div class="d-lg-none mt-1">
+                                    {% if query.thread_id %}
+                                        <small class="text-muted">Thread: {{ query.thread_id }}</small>
+                                    {% endif %}
+                                    <span class="badge bg-info ms-2">{{ query.items_count }} items</span>
+                                </div>
                             </td>
-                            <td>
-                                {% if query.thread_id %}
-                                    <span class="badge bg-primary me-2">{{ query.thread_id }}</span>
-                                {% endif %}
+                            <td class="d-none d-lg-table-cell">
                                 <form action="/update_thread_id" method="post" class="d-inline">
                                     <input type="hidden" name="query_id" value="{{ query.query }}">
                                     <div class="input-group input-group-sm" style="max-width: 130px;">
@@ -117,9 +122,12 @@
                                     </div>
                                 </form>
                             </td>
-                            <td>{{ query.last_found_item }}</td>
+                            <td class="d-none d-md-table-cell">{{ query.last_found_item }}</td>
+                            <td class="text-center">
+                                <span class="badge bg-info">{{ query.items_count }}</span>
+                            </td>
                             <td>
-                                <div class="btn-group" role="group">
+                                <div class="btn-group d-none d-md-flex" role="group">
                                     <a href="/items?query={{ query.query|urlencode }}"
                                        class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-box"></i> View Items
@@ -131,6 +139,21 @@
                                     <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
                                             data-bs-target="#deleteModal{{ query.id }}">
                                         <i class="bi bi-trash"></i> Remove
+                                    </button>
+                                </div>
+                                <!-- Mobile actions - vertical stack -->
+                                <div class="d-md-none d-flex flex-column gap-1">
+                                    <a href="/items?query={{ query.query|urlencode }}"
+                                       class="btn btn-xs btn-outline-primary">
+                                        <i class="bi bi-box"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-xs btn-outline-warning" 
+                                            data-bs-toggle="modal" data-bs-target="#editModal{{ query.id }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-xs btn-outline-danger" data-bs-toggle="modal"
+                                            data-bs-target="#deleteModal{{ query.id }}">
+                                        <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
 

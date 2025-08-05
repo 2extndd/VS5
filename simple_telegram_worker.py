@@ -197,7 +197,7 @@ class SimpleTelegramSender:
                 keyboard = {
                     'inline_keyboard': [[{
                         'text': '🌐 Open Web Interface',
-                        'web_app': {'url': web_url}
+                        'url': web_url
                     }]]
                 }
                 self.send_simple_message(

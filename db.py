@@ -355,6 +355,28 @@ def get_queries():
             conn.close()
 
 
+def get_items_count_by_query(query_id):
+    """Get count of items for a specific query"""
+    conn = None
+    try:
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
+        
+        if db_type == 'postgresql':
+            cursor.execute("SELECT COUNT(*) FROM items WHERE query_id = %s", (query_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM items WHERE query_id = ?", (query_id,))
+            
+        result = cursor.fetchone()
+        return result[0] if result else 0
+    except Exception:
+        print_exc()
+        return 0
+    finally:
+        if conn:
+            conn.close()
+
+
 def is_query_in_db(processed_query):
     conn = None
     try:

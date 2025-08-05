@@ -22,6 +22,83 @@
             flex: 1 0 auto;
         }
 
+        /* Mobile optimization */
+        @media (max-width: 768px) {
+            .table-responsive {
+                font-size: 0.85rem;
+            }
+            
+            .btn-group .btn {
+                font-size: 0.75rem;
+                padding: 0.25rem 0.5rem;
+            }
+            
+            .card-body {
+                padding: 1rem 0.75rem;
+            }
+            
+            .input-group-sm .form-control {
+                font-size: 0.8rem;
+            }
+            
+            .navbar-nav .nav-link {
+                padding: 0.5rem 0.75rem;
+                text-align: center;
+            }
+            
+            .container-fluid {
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }
+            
+            /* Better table on mobile */
+            .table td, .table th {
+                padding: 0.5rem 0.25rem;
+                vertical-align: middle;
+            }
+            
+            /* Stack cards on mobile */
+            .row .col-lg-3, .row .col-md-6 {
+                margin-bottom: 1rem;
+            }
+            
+            /* Mobile-friendly modals */
+            .modal-dialog {
+                margin: 0.5rem;
+                max-width: calc(100% - 1rem);
+            }
+            
+            /* Better form inputs on mobile */
+            .form-control, .form-select {
+                font-size: 16px; /* Prevent zoom on iOS */
+            }
+            
+            /* Hide less important columns on mobile */
+            .d-none-mobile {
+                display: none !important;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .display-4 {
+                font-size: 2rem;
+            }
+            
+            .card-title {
+                font-size: 1rem;
+            }
+            
+            .btn-sm {
+                font-size: 0.75rem;
+                padding: 0.2rem 0.4rem;
+            }
+            
+            .btn-xs {
+                font-size: 0.7rem;
+                padding: 0.15rem 0.3rem;
+            }
+        }
+
         /* Header styling */
         .navbar-brand {
             font-weight: 600;

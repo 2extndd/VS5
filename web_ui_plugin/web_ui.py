@@ -418,12 +418,16 @@ def queries():
         if len(query) > 4:
             thread_id = query[4]
             
+        # Get items count for this query
+        items_count = db.get_items_count_by_query(query[0])
+            
         formatted_queries.append({
             'id': i + 1,
             'query': query[0],
             'display': query_name if query_name else query[1],
             'last_found_item': last_found_item,
-            'thread_id': thread_id
+            'thread_id': thread_id,
+            'items_count': items_count
         })
 
     # Sort by thread_id AND query name within each thread group
