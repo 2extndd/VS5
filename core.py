@@ -240,7 +240,9 @@ def process_items(queue):
         
         # Temporarily disable time filter for testing - accept all items
         data = all_items  # [item for item in all_items if item.is_new_item(1440)]
+        print(f"[DEBUG] Putting {len(data)} items into queue for query_id {query[0]}")
         queue.put((data, query[0]))
+        print(f"[DEBUG] Successfully put items into queue")
         logger.info(f"Scraped {len(data)} items for query: {query[1]}")
 
 
