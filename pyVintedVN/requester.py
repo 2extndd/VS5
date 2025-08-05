@@ -106,6 +106,10 @@ class Requester:
             tried += 1
             with self.session.get(url, params=params) as response:
                 if self.debug:
+                    print(f"[DEBUG] Request to {url} returned status {response.status_code}")
+                    print(f"[DEBUG] Response headers: {dict(response.headers)}")
+                    if response.text:
+                        print(f"[DEBUG] Response text (first 500 chars): {response.text[:500]}")
                     logger.debug(f"Request to {url} returned status {response.status_code}")
                     logger.debug(f"Response headers: {dict(response.headers)}")
                     if response.text:
@@ -114,6 +118,8 @@ class Requester:
                 if response.status_code in (401, 404) and tried < self.MAX_RETRIES:
                     print(f"Cookies invalid, retrying {tried}/{self.MAX_RETRIES}")
                     if self.debug:
+                        print(f"[DEBUG] Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
+                        print(f"[DEBUG] Current cookies: {dict(self.session.cookies)}")
                         logger.debug(f"Cookies invalid retrying {tried}/{self.MAX_RETRIES}")
                         logger.debug(f"Current cookies: {dict(self.session.cookies)}")
                     self.set_cookies()
