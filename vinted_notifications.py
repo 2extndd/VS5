@@ -24,7 +24,9 @@ def scraper_process(items_queue):
     scraper_scheduler = BackgroundScheduler()
     scraper_scheduler.add_job(core.process_items, 'interval', seconds=current_query_refresh_delay, args=[items_queue],
                               name="scraper")
+    print("[DEBUG] Starting scheduler...")
     scraper_scheduler.start()
+    print("[DEBUG] Scheduler started! Entering main loop...")
     try:
         # Keep the process running
         while True:
