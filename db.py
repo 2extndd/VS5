@@ -1,6 +1,10 @@
 import sqlite3
 import os
 from traceback import print_exc
+from logger import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 # Try to import psycopg2 for PostgreSQL support
 try:
