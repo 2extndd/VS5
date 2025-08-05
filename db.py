@@ -220,6 +220,8 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
         
+        logger.info(f"Attempting to add item {id} to database (query_id: {query_id})")
+        
         if db_type == 'postgresql':
             # Insert into db the id and the query_id related to the item
             cursor.execute(
@@ -236,8 +238,12 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
             cursor.execute("UPDATE queries SET last_item=? WHERE id=?", (timestamp, query_id))
             
         conn.commit()
-    except Exception:
-        print_exc()
+        logger.info(f"Successfully added item {id} to database")
+    except Exception as e:
+        logger.error(f"Error adding item {id} to database: {e}")
+        logger.error("Full traceback:", exc_info=True)
+        if conn:
+            conn.rollback()
     finally:
         if conn:
             conn.close()

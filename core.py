@@ -292,15 +292,15 @@ def clear_item_queue(items_queue, new_items_queue):
                     except Exception as e:
                         logger.warning(f"Could not get thread_id for query {query_id}: {e}")
                     
-                    # add the item to the queue with thread_id
-                    logger.info(f"[DEBUG] Adding item to queue: {item.title} (thread_id: {thread_id})")
-                    new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id))
+                    # add the item to the queue with thread_id and photo_url
+                    logger.info(f"[DEBUG] Adding item to queue: {item.title} (thread_id: {thread_id}, photo: {item.photo})")
+                    new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id, item.photo))
                     logger.info(f"[DEBUG] Item added to new_items_queue successfully")
                     
                     # Add the item to the db
                     logger.info(f"[DEBUG] Adding item to database: {item.id}")
-                    db.add_item_to_db(id=item.id, timestamp=item.raw_timestamp, price=item.price, title=item.title,
-                                      photo_url=item.photo, query_id=query_id, currency=item.currency)
+                    db.add_item_to_db(id=item.id, title=item.title, query_id=query_id, price=item.price, 
+                                      timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency)
                     logger.info(f"[DEBUG] Item {item.id} successfully added to database!")
                     
                 except Exception as e:

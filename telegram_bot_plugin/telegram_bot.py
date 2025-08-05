@@ -35,6 +35,8 @@ class LeRobot:
 
             # Handler verify if bot is running
             self.app.add_handler(CommandHandler("hello", hello))
+            # Telegram Mini App handler
+            self.app.add_handler(CommandHandler("app", self.open_web_app))
             # Keyword handlers
             self.app.add_handler(CommandHandler("add_query", self.add_query))
             self.app.add_handler(CommandHandler("remove_query", self.remove_query))
@@ -60,6 +62,43 @@ class LeRobot:
             self.app.run_polling()
         except Exception as e:
             logger.error(f"Error initializing bot: {str(e)}", exc_info=True)
+
+    ### TELEGRAM MINI APP ###
+    
+    async def open_web_app(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Open Telegram Mini App with Web UI"""
+        try:
+            from telegram import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+            
+            # Create web app URL from Railway environment or fallback
+            web_app_url = "https://vs5-production.up.railway.app/"
+            
+            # Create inline keyboard with Web App button
+            keyboard = [[InlineKeyboardButton("🌐 Open Web Interface", web_app=WebAppInfo(url=web_app_url))]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "🎉 <b>Vinted Notifications Web Interface</b>\n\n"
+                "📊 Manage your queries, view items, and configure settings directly in Telegram!\n\n"
+                "✨ <b>Features:</b>\n"
+                "• 🔍 Add/remove search queries\n"
+                "• 🧵 Set thread IDs for topics\n" 
+                "• 📦 View found items\n"
+                "• ⚙️ Configure bot settings\n"
+                "• 📝 View logs\n\n"
+                "👆 <b>Click the button below to open the web interface:</b>",
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Error opening web app: {str(e)}", exc_info=True)
+            try:
+                await update.message.reply_text(
+                    '❌ Error opening web interface. You can access it directly at:\n'
+                    'https://vs5-production.up.railway.app/'
+                )
+            except:
+                pass
 
     ### QUERIES ###
 
@@ -201,7 +240,7 @@ class LeRobot:
 
     ### TELEGRAM SPECIFIC FUNCTIONS ###
 
-    async def send_new_post(self, content, url, text, buy_url=None, buy_text=None, thread_id=None):
+    async def send_new_post(self, content, url, text, buy_url=None, buy_text=None, thread_id=None, photo_url=None):
         try:
             async with self.bot:
                 chat_ID = str(db.get_parameter("telegram_chat_id"))
@@ -211,18 +250,65 @@ class LeRobot:
                 
                 # Try to send to specific thread if thread_id is provided
                 try:
-                    if thread_id:
-                        await self.bot.send_message(
-                            chat_ID, 
-                            content, 
+                    if photo_url:
+                        # Send as photo with caption
+                        if thread_id:
+                            await self.bot.send_photo(
+                                chat_ID,
+                                photo=photo_url,
+                                caption=content,
+                                parse_mode="HTML",
+                                read_timeout=40,
+                                write_timeout=40,
+                                reply_markup=InlineKeyboardMarkup(buttons),
+                                message_thread_id=thread_id
+                            )
+                        else:
+                            await self.bot.send_photo(
+                                chat_ID,
+                                photo=photo_url,
+                                caption=content,
+                                parse_mode="HTML",
+                                read_timeout=40,
+                                write_timeout=40,
+                                reply_markup=InlineKeyboardMarkup(buttons)
+                            )
+                    else:
+                        # Send as text message if no photo
+                        if thread_id:
+                            await self.bot.send_message(
+                                chat_ID, 
+                                content, 
+                                parse_mode="HTML",
+                                read_timeout=40,
+                                write_timeout=40,
+                                reply_markup=InlineKeyboardMarkup(buttons),
+                                message_thread_id=thread_id
+                            )
+                        else:
+                            # Send to main chat if no thread_id
+                            await self.bot.send_message(
+                                chat_ID, 
+                                content, 
+                                parse_mode="HTML",
+                                read_timeout=40,
+                                write_timeout=40,
+                                reply_markup=InlineKeyboardMarkup(buttons)
+                            )
+                except Exception as thread_error:
+                    # If sending to thread fails, fallback to main chat
+                    logger.warning(f"Failed to send to thread {thread_id}: {thread_error}. Sending to main chat.")
+                    if photo_url:
+                        await self.bot.send_photo(
+                            chat_ID,
+                            photo=photo_url,
+                            caption=content,
                             parse_mode="HTML",
                             read_timeout=40,
                             write_timeout=40,
-                            reply_markup=InlineKeyboardMarkup(buttons),
-                            message_thread_id=thread_id
+                            reply_markup=InlineKeyboardMarkup(buttons)
                         )
                     else:
-                        # Send to main chat if no thread_id
                         await self.bot.send_message(
                             chat_ID, 
                             content, 
@@ -231,24 +317,13 @@ class LeRobot:
                             write_timeout=40,
                             reply_markup=InlineKeyboardMarkup(buttons)
                         )
-                except Exception as thread_error:
-                    # If sending to thread fails, fallback to main chat
-                    logger.warning(f"Failed to send to thread {thread_id}: {thread_error}. Sending to main chat.")
-                    await self.bot.send_message(
-                        chat_ID, 
-                        content, 
-                        parse_mode="HTML",
-                        read_timeout=40,
-                        write_timeout=40,
-                        reply_markup=InlineKeyboardMarkup(buttons)
-                    )
                     
         except RetryAfter as e:
             retry_after = e.retry_after
             logger.error(f"Flood control exceeded. Retrying in {retry_after + 2} seconds")
             await asyncio.sleep(retry_after + 2)
             # Retry sending the message
-            await self.send_new_post(content, url, text, buy_url, buy_text, thread_id)
+            await self.send_new_post(content, url, text, buy_url, buy_text, thread_id, photo_url)
         except Exception as e:
             logger.error(f"Error sending new post: {str(e)}", exc_info=True)
 
@@ -268,14 +343,18 @@ class LeRobot:
             while 1:
                 if not self.new_items_queue.empty():
                     queue_item = self.new_items_queue.get()
-                    # Handle both old format (5 items) and new format (6 items with thread_id)
-                    if len(queue_item) == 6:
+                    # Handle different queue formats: (content, url, text, buy_url, buy_text, thread_id, photo_url)
+                    if len(queue_item) == 7:
+                        content, url, text, buy_url, buy_text, thread_id, photo_url = queue_item
+                    elif len(queue_item) == 6:
                         content, url, text, buy_url, buy_text, thread_id = queue_item
+                        photo_url = None
                     else:
                         content, url, text, buy_url, buy_text = queue_item
                         thread_id = None
+                        photo_url = None
                     
-                    await self.send_new_post(content, url, text, buy_url, buy_text, thread_id)
+                    await self.send_new_post(content, url, text, buy_url, buy_text, thread_id, photo_url)
                 else:
                     await asyncio.sleep(0.1)
                     pass
@@ -286,6 +365,7 @@ class LeRobot:
         try:
             await self.bot.set_my_commands([
                 ("hello", "Verify if bot is running"),
+                ("app", "Open Web Interface (Mini App)"),
                 ("add_query", "Add a keyword to the bot"),
                 ("remove_query", "Remove a keyword from the bot"),
                 ("queries", "List all keywords"),
