@@ -91,26 +91,10 @@
                         <tbody>
                         {% set current_thread_id = none %}
                         {% for query in queries %}
-                        <!-- Thread group separator -->
-                        {% if query.thread_id != current_thread_id %}
-                            {% if not loop.first %}
-                                <tr class="table-active">
-                                    <td colspan="5" class="text-center border-top border-2">
-                                        <small class="text-muted">
-                                            <i class="bi bi-arrow-down"></i>
-                                            {% if query.thread_id %}
-                                                Thread ID: {{ query.thread_id }}
-                                            {% else %}
-                                                No Thread ID
-                                            {% endif %}
-                                        </small>
-                                    </td>
-                                </tr>
-                            {% endif %}
-                            {% set current_thread_id = query.thread_id %}
-                        {% endif %}
                         
-                        <tr {% if query.thread_id %}class="table-light"{% endif %}>
+                        <tr {% if query.thread_id != current_thread_id and not loop.first %}style="border-top: 3px solid #0d6efd; padding-top: 8px;"{% endif %} 
+                            {% if query.thread_id %}class="table-light"{% endif %}>
+                            {% set current_thread_id = query.thread_id %}
                             <td>{{ query.id }}</td>
                             <td>
                                 <a href="{{ query.query }}" target="_blank" class="text-decoration-none">
