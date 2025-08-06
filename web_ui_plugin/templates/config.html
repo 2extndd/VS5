@@ -85,6 +85,73 @@
                                         <small class="form-text text-muted">The chat ID where notifications will be
                                             sent</small>
                                     </div>
+                                    
+                                    <!-- Telegram Bot Control -->
+                                    <div class="mt-3 pt-3 border-top">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <small class="text-muted process-status" data-process="telegram">Checking status...</small>
+                                            </div>
+                                            <div>
+                                                <button type="button" class="btn btn-success btn-sm process-control" data-process="telegram" data-action="start">
+                                                    <i class="bi bi-play-fill"></i> Start
+                                                </button>
+                                                <button type="button" class="btn btn-danger btn-sm process-control" data-process="telegram" data-action="stop">
+                                                    <i class="bi bi-stop-fill"></i> Stop
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <!-- Country Allowlist moved here -->
+                            <div class="card h-100">
+                                <div class="card-header d-flex align-items-center">
+                                    <i class="bi bi-globe me-2 text-info"></i>
+                                    <h5 class="card-title mb-0">Country Allowlist</h5>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Add Country Form -->
+                                    <form action="/add_country" method="post" class="mb-3">
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control" name="country" placeholder="DE" 
+                                                   maxlength="2" style="text-transform: uppercase;" required>
+                                            <button type="submit" class="btn btn-outline-primary">
+                                                <i class="bi bi-plus"></i> Add
+                                            </button>
+                                        </div>
+                                        <small class="form-text text-muted">2-letter country code (e.g., FR, DE, IT)</small>
+                                    </form>
+                                    
+                                    <!-- Current Allowlist -->
+                                    <div class="allowlist-container" style="max-height: 200px; overflow-y: auto;">
+                                        {% if countries %}
+                                            <ul class="list-group list-group-flush">
+                                                {% for country in countries %}
+                                                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                                    <span class="badge bg-secondary">{{ country }}</span>
+                                                    <form action="/remove_country" method="post" class="d-inline">
+                                                        <input type="hidden" name="country" value="{{ country }}">
+                                                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                            <i class="bi bi-x"></i>
+                                                        </button>
+                                                    </form>
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                            <div class="text-center mt-2">
+                                                <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#clearAllowlistModal">
+                                                    <i class="bi bi-trash"></i> Clear All
+                                                </button>
+                                            </div>
+                                        {% else %}
+                                            <div class="alert alert-info alert-sm text-center">
+                                                <small><i class="bi bi-info-circle me-1"></i>No countries in allowlist. All countries allowed.</small>
+                                            </div>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -120,14 +187,6 @@
                                                 <label for="proxy_list" class="form-label">Proxy List</label>
                                                 <textarea class="form-control" id="proxy_list" name="proxy_list"
                                                           rows="3">{{ params.proxy_list }}</textarea>
-                                                <small class="form-text text-muted">List of proxies separated by
-                                                    semicolons (;) or newlines<br>
-                                                    Supported formats:<br>
-                                                    • ip:port<br>
-                                                    • user:pass@ip:port (with authentication)<br>
-                                                    • http://ip:port<br>
-                                                    • http://user:pass@ip:port<br>
-                                                    • <strong>ip:port:user:pass (WebShare format)</strong></small>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="proxy_list_link" class="form-label">Proxy List Link</label>
@@ -135,6 +194,14 @@
                                                        name="proxy_list_link" value="{{ params.proxy_list_link }}">
                                                 <small class="form-text text-muted">URL to fetch proxies from (one proxy
                                                     per line)</small>
+                                            </div>
+                                            
+                                            <!-- Current Proxy Display -->
+                                            <div class="mb-3">
+                                                <label class="form-label">Current Proxy</label>
+                                                <div class="bg-light p-2 rounded border">
+                                                    <small class="text-muted font-monospace" id="current-proxy-display">Loading...</small>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -153,113 +220,9 @@
     </div>
 </div>
 
-<!-- Country Allowlist - Separate card to avoid nested forms -->
-<div class="row mt-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex align-items-center">
-                <i class="bi bi-globe me-2 text-info"></i>
-                <h5 class="card-title mb-0">Country Allowlist</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <!-- Add Country Form -->
-                        <form action="/add_country" method="post" class="mb-3">
-                            <div class="input-group">
-                                <input type="text" class="form-control" name="country" placeholder="DE" 
-                                       maxlength="2" required style="text-transform: uppercase;">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-plus-circle"></i> Add
-                                </button>
-                            </div>
-                            <small class="form-text text-muted">2-letter country code (e.g., FR, DE, IT)</small>
-                        </form>
-                    </div>
-                    <div class="col-md-6">
-                        <!-- Current Allowlist -->
-                        <div class="allowlist-container" style="max-height: 200px; overflow-y: auto;">
-                            {% if countries %}
-                            <div class="list-group list-group-flush">
-                                {% for country in countries %}
-                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <span class="badge bg-secondary">{{ country }}</span>
-                                    <form action="/remove_country/{{ country }}" method="post" class="d-inline">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            <div class="mt-2">
-                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal"
-                                        data-bs-target="#clearAllowlistModal">
-                                    <i class="bi bi-trash"></i> Clear All
-                                </button>
-                            </div>
-                            {% else %}
-                            <div class="alert alert-info alert-sm">
-                                <i class="bi bi-info-circle"></i> No restrictions - all countries allowed
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row mt-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex align-items-center">
-                <i class="bi bi-toggles me-2 text-info"></i>
-                <h5 class="card-title mb-0">Process Control</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                <h6 class="mb-0">Telegram Bot</h6>
-                                <small class="text-muted process-status" data-process="telegram">Checking
-                                    status...</small>
-                            </div>
-                            <div>
-                                <button class="btn btn-success process-control" data-process="telegram"
-                                        data-action="start">
-                                    <i class="bi bi-play-fill"></i> Start
-                                </button>
-                                <button class="btn btn-danger process-control" data-process="telegram"
-                                        data-action="stop">
-                                    <i class="bi bi-stop-fill"></i> Stop
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                <h6 class="mb-0">RSS Feed</h6>
-                                <small class="text-muted process-status" data-process="rss">Checking status...</small>
-                            </div>
-                            <div>
-                                <button class="btn btn-success process-control" data-process="rss" data-action="start">
-                                    <i class="bi bi-play-fill"></i> Start
-                                </button>
-                                <button class="btn btn-danger process-control" data-process="rss" data-action="stop">
-                                    <i class="bi bi-stop-fill"></i> Stop
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+
+
 
 <!-- Railway Auto-Redeploy Monitoring -->
 <div class="row mt-4">
@@ -643,6 +606,12 @@
         }
         
         document.getElementById('proxy-recheck-interval').textContent = (data.proxy_recheck_interval_hours || 6) + ' hours';
+        
+        // Update current proxy display in Proxy Settings
+        const currentProxyDisplay = document.getElementById('current-proxy-display');
+        if (currentProxyDisplay) {
+            currentProxyDisplay.textContent = data.current_single_proxy || 'None';
+        }
     }
 </script>
 {% endblock %}
