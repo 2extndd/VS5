@@ -242,17 +242,67 @@ class RailwayRedeployManager:
                 cwd=os.getcwd()
             )
             
+            logger.info(f"[REDEPLOY] CLI command result: return_code={result.returncode}")
+            logger.info(f"[REDEPLOY] CLI stdout: {result.stdout}")
+            logger.info(f"[REDEPLOY] CLI stderr: {result.stderr}")
+            
             if result.returncode == 0:
                 logger.info("[REDEPLOY] ✅ Railway redeploy via CLI successful!")
                 self.last_redeploy_time = datetime.now()
                 self._reset_error_tracking()
+                return True
             else:
                 logger.error(f"[REDEPLOY] CLI redeploy failed: {result.stderr}")
+                return False
                 
         except subprocess.TimeoutExpired:
             logger.error("[REDEPLOY] CLI redeploy timed out")
+            return False
+        except FileNotFoundError:
+            logger.error("[REDEPLOY] Railway CLI not found in production environment")
+            # Пробуем альтернативный метод
+            return self._emergency_redeploy()
         except Exception as e:
             logger.error(f"[REDEPLOY] Fallback redeploy failed: {e}")
+            return False
+    
+    def _emergency_redeploy(self):
+        """Экстренный метод редеплоя через системный выход"""
+        try:
+            logger.critical("[REDEPLOY] Using emergency redeploy method - forcing app restart")
+            
+            # Обновляем время редеплоя
+            self.last_redeploy_time = datetime.now()
+            self._reset_error_tracking()
+            
+            # Записываем в файл маркер для мониторинга
+            try:
+                with open('/tmp/redeploy_requested', 'w') as f:
+                    f.write(str(self.last_redeploy_time))
+                logger.info("[REDEPLOY] Created redeploy marker file")
+            except:
+                pass
+            
+            # Принудительно завершаем процесс для перезапуска Railway
+            import signal
+            import threading
+            
+            def delayed_exit():
+                import time
+                time.sleep(2)  # Даем время на отправку ответа
+                logger.critical("[REDEPLOY] Forcing application restart...")
+                os._exit(1)  # Принудительный выход
+            
+            # Запускаем в отдельном потоке
+            thread = threading.Thread(target=delayed_exit)
+            thread.daemon = True
+            thread.start()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"[REDEPLOY] Emergency redeploy failed: {e}")
+            return False
     
     def _reset_error_tracking(self):
         """Сбросить отслеживание ошибок после успешного редеплоя"""
