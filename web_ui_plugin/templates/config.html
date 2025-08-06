@@ -88,55 +88,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header d-flex align-items-center">
-                                    <i class="bi bi-globe me-2 text-info"></i>
-                                    <h5 class="card-title mb-0">Country Allowlist</h5>
-                                </div>
-                                <div class="card-body">
-                                    <!-- Add Country Form -->
-                                    <form action="/add_country" method="post" class="mb-3">
-                                        <div class="input-group">
-                                            <input type="text" class="form-control" name="country" placeholder="DE" 
-                                                   maxlength="2" required style="text-transform: uppercase;">
-                                            <button type="submit" class="btn btn-primary">
-                                                <i class="bi bi-plus-circle"></i> Add
-                                            </button>
-                                        </div>
-                                        <small class="form-text text-muted">2-letter country code (e.g., FR, DE, IT)</small>
-                                    </form>
 
-                                    <!-- Current Allowlist -->
-                                    <div class="allowlist-container" style="max-height: 200px; overflow-y: auto;">
-                                        {% if countries %}
-                                        <div class="list-group list-group-flush">
-                                            {% for country in countries %}
-                                            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                                <span class="badge bg-secondary">{{ country }}</span>
-                                                <form action="/remove_country/{{ country }}" method="post" class="d-inline">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </form>
-                                            </div>
-                                            {% endfor %}
-                                        </div>
-                                        <div class="mt-2">
-                                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal"
-                                                    data-bs-target="#clearAllowlistModal">
-                                                <i class="bi bi-trash"></i> Clear All
-                                            </button>
-                                        </div>
-                                        {% else %}
-                                        <div class="alert alert-info alert-sm">
-                                            <i class="bi bi-info-circle"></i> No restrictions - all countries allowed
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                     <div class="row mb-4">
                         <div class="col-md-12">
@@ -196,6 +148,64 @@
                         </div>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Country Allowlist - Separate card to avoid nested forms -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex align-items-center">
+                <i class="bi bi-globe me-2 text-info"></i>
+                <h5 class="card-title mb-0">Country Allowlist</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <!-- Add Country Form -->
+                        <form action="/add_country" method="post" class="mb-3">
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="country" placeholder="DE" 
+                                       maxlength="2" required style="text-transform: uppercase;">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-plus-circle"></i> Add
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">2-letter country code (e.g., FR, DE, IT)</small>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <!-- Current Allowlist -->
+                        <div class="allowlist-container" style="max-height: 200px; overflow-y: auto;">
+                            {% if countries %}
+                            <div class="list-group list-group-flush">
+                                {% for country in countries %}
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                    <span class="badge bg-secondary">{{ country }}</span>
+                                    <form action="/remove_country/{{ country }}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal"
+                                        data-bs-target="#clearAllowlistModal">
+                                    <i class="bi bi-trash"></i> Clear All
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-info alert-sm">
+                                <i class="bi bi-info-circle"></i> No restrictions - all countries allowed
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
