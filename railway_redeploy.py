@@ -235,7 +235,7 @@ class RailwayRedeployManager:
             
             # Попытка выполнить редеплой через CLI
             result = subprocess.run(
-                ["railway", "redeploy", "--yes"],
+                ["railway", "redeploy", "-y"],
                 capture_output=True,
                 text=True,
                 timeout=60,
