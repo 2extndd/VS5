@@ -102,6 +102,23 @@ main {
     aspect-ratio: 4/5; /* Same 4:5 ratio for placeholders */
 }
 
+/* Allowlist compact styling */
+.allowlist-container .list-group-item {
+    padding: 0.5rem 0;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.allowlist-container .list-group-item:last-child {
+    border-bottom: none;
+}
+
+.allowlist-container .alert-sm {
+    padding: 0.5rem;
+    margin-bottom: 0;
+    font-size: 0.85rem;
+}
+
 #cardView .card-body {
     padding: 0.75rem;
 }

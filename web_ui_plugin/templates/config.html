@@ -88,7 +88,55 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- RSS Feed section removed -->
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header d-flex align-items-center">
+                                    <i class="bi bi-globe me-2 text-info"></i>
+                                    <h5 class="card-title mb-0">Country Allowlist</h5>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Add Country Form -->
+                                    <form action="/add_country" method="post" class="mb-3">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" name="country" placeholder="DE" 
+                                                   maxlength="2" required style="text-transform: uppercase;">
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="bi bi-plus-circle"></i> Add
+                                            </button>
+                                        </div>
+                                        <small class="form-text text-muted">2-letter country code (e.g., FR, DE, IT)</small>
+                                    </form>
+
+                                    <!-- Current Allowlist -->
+                                    <div class="allowlist-container" style="max-height: 200px; overflow-y: auto;">
+                                        {% if countries %}
+                                        <div class="list-group list-group-flush">
+                                            {% for country in countries %}
+                                            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                                <span class="badge bg-secondary">{{ country }}</span>
+                                                <form action="/remove_country/{{ country }}" method="post" class="d-inline">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="mt-2">
+                                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal"
+                                                    data-bs-target="#clearAllowlistModal">
+                                                <i class="bi bi-trash"></i> Clear All
+                                            </button>
+                                        </div>
+                                        {% else %}
+                                        <div class="alert alert-info alert-sm">
+                                            <i class="bi bi-info-circle"></i> No restrictions - all countries allowed
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="row mb-4">
                         <div class="col-md-12">
@@ -198,6 +246,27 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clear Allowlist Modal -->
+<div class="modal fade" id="clearAllowlistModal" tabindex="-1" aria-labelledby="clearAllowlistModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="clearAllowlistModalLabel">Confirm Clearing Allowlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to clear the entire allowlist? This will allow items from all countries.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="/clear_allowlist" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Clear Allowlist</button>
+                </form>
             </div>
         </div>
     </div>

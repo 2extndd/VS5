@@ -732,7 +732,8 @@ def items():
 @app.route('/config')
 def config():
     params = db.get_all_parameters()
-    return render_template('config.html', params=params)
+    countries = db.get_allowlist()
+    return render_template('config.html', params=params, countries=countries)
 
 
 @app.route('/update_config', methods=['POST'])
@@ -835,7 +836,7 @@ def add_country():
     else:
         flash('No country provided', 'error')
 
-    return redirect(url_for('allowlist'))
+    return redirect(url_for('config'))
 
 
 @app.route('/remove_country/<country>', methods=['POST'])
@@ -843,7 +844,7 @@ def remove_country(country):
     message, country_list = core.process_remove_country(country)
     flash(message, 'success')
 
-    return redirect(url_for('allowlist'))
+    return redirect(url_for('config'))
 
 
 @app.route('/clear_allowlist', methods=['POST'])
@@ -851,7 +852,7 @@ def clear_allowlist():
     db.clear_allowlist()
     flash('Allowlist cleared', 'success')
 
-    return redirect(url_for('allowlist'))
+    return redirect(url_for('config'))
 
 
 @app.route('/logs')
