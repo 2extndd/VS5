@@ -1743,14 +1743,24 @@ def force_redeploy():
         
         from railway_redeploy import redeploy_manager
         
+        logger.info("[FORCE_REDEPLOY] Manual redeploy initiated via web interface")
+        
         # Принудительно вызываем редеплой
         redeploy_manager._perform_redeploy()
         
-        flash('Принудительный редеплой Railway инициирован!', 'success')
-        return jsonify({"success": True, "message": "Redeploy initiated"})
+        # Проверяем, был ли редеплой успешным
+        status = redeploy_manager.get_status()
+        if status.get('last_redeploy_time'):
+            logger.info("[FORCE_REDEPLOY] Redeploy completed successfully")
+            flash('Принудительный редеплой Railway выполнен успешно!', 'success')
+            return jsonify({"success": True, "message": "Redeploy completed successfully"})
+        else:
+            logger.warning("[FORCE_REDEPLOY] Redeploy may have failed - no timestamp updated")
+            flash('Редеплой инициирован, но статус неизвестен', 'warning')
+            return jsonify({"success": True, "message": "Redeploy initiated, status unknown"})
         
     except Exception as e:
-        logger.error(f"Error during force redeploy: {e}")
+        logger.error(f"[FORCE_REDEPLOY] Error during force redeploy: {e}")
         flash(f'Ошибка при редеплое: {str(e)}', 'error')
         return jsonify({"error": str(e)}), 500
 

@@ -402,11 +402,16 @@ def get_proxy_statistics() -> dict:
     # Import db here to avoid circular imports
     import db
     
+    # Для множественных прокси показываем пример случайного
+    current_proxy_display = _SINGLE_PROXY
+    if not current_proxy_display and _PROXY_CACHE:
+        current_proxy_display = f"Random from {len(_PROXY_CACHE)} proxies (e.g., {_PROXY_CACHE[0][:20]}...)"
+    
     stats = {
         "cache_initialized": _PROXY_CACHE_INITIALIZED,
         "total_cached_proxies": len(_PROXY_CACHE) if _PROXY_CACHE else 0,
         "single_proxy_mode": _SINGLE_PROXY is not None,
-        "current_single_proxy": _SINGLE_PROXY if _SINGLE_PROXY else None,
+        "current_single_proxy": current_proxy_display,
         "proxy_check_enabled": db.get_parameter("check_proxies") == "True",
         "last_check_time": db.get_parameter("last_proxy_check_time"),
         "proxy_list_configured": bool(db.get_parameter("proxy_list")),
