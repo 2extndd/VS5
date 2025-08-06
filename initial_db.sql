@@ -66,5 +66,7 @@ VALUES ('telegram_enabled', 'False'),
        ('check_proxies', 'False'),
        ('last_proxy_check_time', '0'),
        
+       ('last_redeploy_time', ''),
+       
        ('vinted_api_requests', '0'),
        ('bot_start_time', '0');

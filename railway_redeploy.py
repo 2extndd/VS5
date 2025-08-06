@@ -35,7 +35,7 @@ class RailwayRedeployManager:
         self.max_403_errors = 5  # Минимальное количество 403 ошибок подряд
         
         # Защита от частых редеплоев
-        self.last_redeploy_time = None
+        self.last_redeploy_time = self._load_last_redeploy_time()
         self.min_redeploy_interval_minutes = 10
         
         self.lock = threading.Lock()
@@ -43,6 +43,28 @@ class RailwayRedeployManager:
         logger.info(f"[REDEPLOY] Initialized Railway Redeploy Manager")
         logger.info(f"[REDEPLOY] Project ID: {self.project_id}")
         logger.info(f"[REDEPLOY] Threshold: {self.redeploy_threshold_minutes} minutes")
+        if self.last_redeploy_time:
+            logger.info(f"[REDEPLOY] Last redeploy: {self.last_redeploy_time}")
+    
+    def _load_last_redeploy_time(self):
+        """Загрузить время последнего редеплоя из базы данных"""
+        try:
+            import db
+            last_redeploy_str = db.get_parameter("last_redeploy_time")
+            if last_redeploy_str and last_redeploy_str != "None":
+                return datetime.fromisoformat(last_redeploy_str)
+        except Exception as e:
+            logger.debug(f"[REDEPLOY] Could not load last redeploy time: {e}")
+        return None
+    
+    def _save_last_redeploy_time(self, redeploy_time):
+        """Сохранить время последнего редеплоя в базу данных"""
+        try:
+            import db
+            db.set_parameter("last_redeploy_time", redeploy_time.isoformat())
+            logger.info(f"[REDEPLOY] Saved redeploy time to database: {redeploy_time}")
+        except Exception as e:
+            logger.error(f"[REDEPLOY] Could not save redeploy time: {e}")
     
     def report_403_error(self):
         """Сообщить о получении 403 ошибки"""
@@ -150,6 +172,7 @@ class RailwayRedeployManager:
                 if "errors" not in result:
                     logger.info("[REDEPLOY] ✅ Railway redeploy initiated successfully!")
                     self.last_redeploy_time = datetime.now()
+                    self._save_last_redeploy_time(self.last_redeploy_time)
                     self._reset_error_tracking()
                 else:
                     logger.error(f"[REDEPLOY] GraphQL errors: {result.get('errors')}")
@@ -249,6 +272,7 @@ class RailwayRedeployManager:
             if result.returncode == 0:
                 logger.info("[REDEPLOY] ✅ Railway redeploy via CLI successful!")
                 self.last_redeploy_time = datetime.now()
+                self._save_last_redeploy_time(self.last_redeploy_time)
                 self._reset_error_tracking()
                 return True
             else:
@@ -273,6 +297,7 @@ class RailwayRedeployManager:
             
             # Обновляем время редеплоя
             self.last_redeploy_time = datetime.now()
+            self._save_last_redeploy_time(self.last_redeploy_time)
             self._reset_error_tracking()
             
             # Записываем в файл маркер для мониторинга
