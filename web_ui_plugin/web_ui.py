@@ -614,7 +614,9 @@ def items():
                 query_string = q[1]
                 break
 
-    items_data = db.get_items(limit=limit, query=query_string)
+    # If limit is 0, get all items (no limit)
+    items_limit = None if limit == 0 else limit
+    items_data = db.get_items(limit=items_limit, query=query_string)
     formatted_items = []
 
     for item in items_data:
