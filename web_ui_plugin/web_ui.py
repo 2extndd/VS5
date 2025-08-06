@@ -707,30 +707,64 @@ def config():
 
 @app.route('/update_config', methods=['POST'])
 def update_config():
-    # Update Telegram parameters
-    telegram_enabled = 'telegram_enabled' in request.form
-    db.set_parameter('telegram_enabled', str(telegram_enabled))
-    db.set_parameter('telegram_token', request.form.get('telegram_token', ''))
-    db.set_parameter('telegram_chat_id', request.form.get('telegram_chat_id', ''))
+    try:
+        logger.info(f"[CONFIG] Update config request received")
+        logger.info(f"[CONFIG] Form data: {dict(request.form)}")
+        
+        # Update Telegram parameters
+        telegram_enabled = 'telegram_enabled' in request.form
+        logger.info(f"[CONFIG] Telegram enabled: {telegram_enabled}")
+        db.set_parameter('telegram_enabled', str(telegram_enabled))
+        db.set_parameter('telegram_token', request.form.get('telegram_token', ''))
+        db.set_parameter('telegram_chat_id', request.form.get('telegram_chat_id', ''))
 
-    # RSS parameters removed
+        # RSS parameters removed
 
-    # Update System parameters
-    db.set_parameter('items_per_query', request.form.get('items_per_query', '20'))
-    db.set_parameter('query_refresh_delay', request.form.get('query_refresh_delay', '60'))
+        # Update System parameters
+        items_per_query = request.form.get('items_per_query', '20')
+        query_refresh_delay = request.form.get('query_refresh_delay', '60')
+        logger.info(f"[CONFIG] System params - items_per_query: {items_per_query}, query_refresh_delay: {query_refresh_delay}")
+        db.set_parameter('items_per_query', items_per_query)
+        db.set_parameter('query_refresh_delay', query_refresh_delay)
 
-    # Update Proxy parameters
-    check_proxies = 'check_proxies' in request.form
-    db.set_parameter('check_proxies', str(check_proxies))
-    db.set_parameter('proxy_list', request.form.get('proxy_list', ''))
-    db.set_parameter('proxy_list_link', request.form.get('proxy_list_link', ''))
+        # Update Proxy parameters
+        check_proxies = 'check_proxies' in request.form
+        logger.info(f"[CONFIG] Check proxies: {check_proxies}")
+        db.set_parameter('check_proxies', str(check_proxies))
+        db.set_parameter('proxy_list', request.form.get('proxy_list', ''))
+        db.set_parameter('proxy_list_link', request.form.get('proxy_list_link', ''))
 
-    # Reset proxy cache to force refresh on next use
-    db.set_parameter('last_proxy_check_time', "1")
-    logger.info("Proxy settings updated, cache reset")
+        # Reset proxy cache to force refresh on next use
+        db.set_parameter('last_proxy_check_time', "1")
+        logger.info("Proxy settings updated, cache reset")
 
-    flash('Configuration updated', 'success')
-    return redirect(url_for('config'))
+        logger.info("[CONFIG] Configuration update completed successfully")
+        flash('Configuration updated successfully!', 'success')
+        return redirect(url_for('config'))
+        
+    except Exception as e:
+        logger.error(f"[CONFIG] Error updating configuration: {e}")
+        logger.error(f"[CONFIG] Full traceback:", exc_info=True)
+        flash(f'Error updating configuration: {str(e)}', 'error')
+        return redirect(url_for('config'))
+
+
+@app.route('/test_config', methods=['GET', 'POST'])
+def test_config():
+    """Test endpoint for configuration debugging"""
+    if request.method == 'GET':
+        return jsonify({
+            'status': 'ok',
+            'message': 'Config endpoint is accessible',
+            'method': 'GET'
+        })
+    else:
+        return jsonify({
+            'status': 'ok',
+            'message': 'Config endpoint received POST request',
+            'form_data': dict(request.form),
+            'method': 'POST'
+        })
 
 
 @app.route('/control/<process_name>/<action>', methods=['POST'])
