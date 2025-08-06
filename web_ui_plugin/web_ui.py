@@ -391,7 +391,8 @@ def queries():
             
         formatted_queries.append({
             'id': i + 1,
-            'query': query[0],
+            'query_id': query[0],  # ID для ссылок на /items
+            'query': query[1],     # URL Vinted для внешних ссылок
             'display': query_name if query_name else query[1],
             'last_found_item': last_found_item,
             'thread_id': thread_id,

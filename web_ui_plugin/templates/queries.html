@@ -128,7 +128,7 @@
                             </td>
                             <td>
                                 <div class="btn-group d-none d-md-flex" role="group">
-                                    <a href="/items?query={{ query.query|urlencode }}"
+                                    <a href="/items?query={{ query.query_id }}"
                                        class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-box"></i> View Items
                                     </a>
@@ -143,7 +143,7 @@
                                 </div>
                                 <!-- Mobile actions - vertical stack -->
                                 <div class="d-md-none d-flex flex-column gap-1">
-                                    <a href="/items?query={{ query.query|urlencode }}"
+                                    <a href="/items?query={{ query.query_id }}"
                                        class="btn btn-xs btn-outline-primary">
                                         <i class="bi bi-box"></i>
                                     </a>
@@ -176,7 +176,7 @@
                                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                                                     Cancel
                                                 </button>
-                                                <form action="/remove_query/{{ query.id }}" method="post"
+                                                <form action="/remove_query/{{ query.query_id }}" method="post"
                                                       class="d-inline">
                                                     <button type="submit" class="btn btn-danger">Remove</button>
                                                 </form>
@@ -196,7 +196,7 @@
                                                 </h5>
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                             </div>
-                                            <form action="/edit_query/{{ query.id }}" method="post">
+                                            <form action="/edit_query/{{ query.query_id }}" method="post">
                                                 <div class="modal-body">
                                                     <div class="mb-3">
                                                         <label for="editQuery{{ query.id }}" class="form-label">Vinted URL:</label>
