@@ -91,10 +91,10 @@ def get_random_proxy() -> Optional[str]:
     """
     global _PROXY_CACHE, _PROXY_CACHE_INITIALIZED, _SINGLE_PROXY
     
-    logger.info(f"[DEBUG] get_random_proxy() called")
-    logger.info(f"[DEBUG] _PROXY_CACHE_INITIALIZED: {_PROXY_CACHE_INITIALIZED}")
-    logger.info(f"[DEBUG] _PROXY_CACHE: {_PROXY_CACHE}")
-    logger.info(f"[DEBUG] _SINGLE_PROXY: {_SINGLE_PROXY}")
+    logger.info(f"[PROXY] get_random_proxy() called")
+    logger.info(f"[PROXY] Cache initialized: {_PROXY_CACHE_INITIALIZED}")
+    logger.info(f"[PROXY] Cache size: {len(_PROXY_CACHE) if _PROXY_CACHE else 0}")
+    logger.info(f"[PROXY] Single proxy mode: {_SINGLE_PROXY is not None}")
 
     # Import db here to avoid circular imports
     import db
@@ -138,7 +138,7 @@ def get_random_proxy() -> Optional[str]:
 
     # Check if PROXY_LIST is configured in the database
     proxy_list = db.get_parameter("proxy_list")
-    logger.info(f"[DEBUG] proxy_list from DB: {proxy_list}")
+    logger.info(f"[PROXY] proxy_list from DB: {proxy_list[:100] if proxy_list else 'None'}{'...' if proxy_list and len(proxy_list) > 100 else ''}")
     if proxy_list:
         try:
             # If PROXY_LIST is stored as a Python list string representation, eval it
@@ -165,50 +165,57 @@ def get_random_proxy() -> Optional[str]:
                     else:
                         converted_proxies.append(proxy)
                 all_proxies = converted_proxies
-            logger.info(f"[DEBUG] Parsed {len(all_proxies)} proxies from proxy_list")
+            logger.info(f"[PROXY] Parsed {len(all_proxies)} proxies from proxy_list")
         except Exception as e:
-            logger.error(f"[DEBUG] Error parsing proxy_list: {e}")
+            logger.error(f"[PROXY] Error parsing proxy_list: {e}")
             all_proxies = []
 
     # Check if PROXY_LIST_LINK is configured in the database
     proxy_list_link = db.get_parameter("proxy_list_link")
     if proxy_list_link:
+        logger.info(f"[PROXY] Fetching proxies from link: {proxy_list_link}")
         # Fetch proxies from the link and add them to all_proxies
         link_proxies = fetch_proxies_from_link(proxy_list_link)
+        logger.info(f"[PROXY] Fetched {len(link_proxies)} proxies from link")
         all_proxies.extend(link_proxies)
+    
+    logger.info(f"[PROXY] Total proxies collected: {len(all_proxies)}")
 
     # Check proxies in parallel if we have any and CHECK_PROXIES is True
     if all_proxies:
         check_proxies = db.get_parameter("check_proxies") == "True"
-        logger.info(f"[DEBUG] check_proxies setting: {check_proxies}")
+        logger.info(f"[PROXY] check_proxies setting: {check_proxies}")
         if check_proxies:
+            logger.info(f"[PROXY] Starting parallel proxy validation...")
             working_proxies = check_proxies_parallel(all_proxies)
-            logger.info(f"[DEBUG] Found {len(working_proxies)} working proxies out of {len(all_proxies)}")
+            logger.info(f"[PROXY] Proxy validation complete: {len(working_proxies)} working out of {len(all_proxies)}")
             if working_proxies:
                 _PROXY_CACHE = working_proxies
                 # If there's only one working proxy, cache it separately
                 if len(working_proxies) == 1:
                     _SINGLE_PROXY = working_proxies[0]
-                    logger.info(f"[DEBUG] Using single proxy: {_SINGLE_PROXY}")
+                    logger.info(f"[PROXY] Using single validated proxy: {_SINGLE_PROXY}")
                     return _SINGLE_PROXY
                 selected_proxy = random.choice(working_proxies)
-                logger.info(f"[DEBUG] Selected random proxy: {selected_proxy}")
+                logger.info(f"[PROXY] Selected random validated proxy: {selected_proxy}")
                 return selected_proxy
+            else:
+                logger.warning(f"[PROXY] No working proxies found after validation!")
         else:
             # If CHECK_PROXIES is False, just cache all proxies without checking them
-            logger.info(f"[DEBUG] Using all {len(all_proxies)} proxies without checking")
+            logger.info(f"[PROXY] Using all {len(all_proxies)} proxies without validation")
             _PROXY_CACHE = all_proxies
             # If there's only one proxy, cache it separately
             if len(all_proxies) == 1:
                 _SINGLE_PROXY = all_proxies[0]
-                logger.info(f"[DEBUG] Using single unchecked proxy: {_SINGLE_PROXY}")
+                logger.info(f"[PROXY] Using single unvalidated proxy: {_SINGLE_PROXY}")
                 return _SINGLE_PROXY
             selected_proxy = random.choice(all_proxies)
-            logger.info(f"[DEBUG] Selected random unchecked proxy: {selected_proxy}")
+            logger.info(f"[PROXY] Selected random unvalidated proxy: {selected_proxy}")
             return selected_proxy
 
     # No working proxies found
-    logger.info(f"[DEBUG] No proxies found or no working proxies")
+    logger.warning(f"[PROXY] No proxies available - using direct connection")
     _PROXY_CACHE = None
     return None
 
@@ -231,6 +238,7 @@ def check_proxy(proxy: str) -> bool:
 
     # Convert proxy string to dictionary format
     proxy_dict = convert_proxy_string_to_dict(proxy)
+    proxy_display = f"{proxy[:20]}..." if len(proxy) > 20 else proxy
 
     try:
         # Create a new session for testing (ensures thread safety)
@@ -244,16 +252,23 @@ def check_proxy(proxy: str) -> bool:
         session.headers.update(headers)
 
         # Make a HEAD request to the test URL with the proxy
+        start_time = time.time()
         response = session.head(_TEST_URL, proxies=proxy_dict, timeout=_TEST_TIMEOUT)
+        response_time = round((time.time() - start_time) * 1000, 2)
 
         # Check if the request was successful
-        return response.status_code == 200
+        is_working = response.status_code == 200
+        if is_working:
+            logger.info(f"[PROXY] ✅ {proxy_display} - OK ({response_time}ms)")
+        else:
+            logger.warning(f"[PROXY] ❌ {proxy_display} - HTTP {response.status_code}")
+        return is_working
     except (RequestException, ConnectionError, TimeoutError) as e:
-        # Any exception means the proxy is not working
+        logger.warning(f"[PROXY] ❌ {proxy_display} - {type(e).__name__}: {str(e)[:50]}")
         return False
     except Exception as e:
         # Catch any other exceptions to prevent process crashes
-        logger.debug(f"Error checking proxy {proxy}: {e}")
+        logger.warning(f"[PROXY] ❌ {proxy_display} - Unexpected error: {str(e)[:50]}")
         return False
     finally:
         # Ensure the session is closed to prevent resource leaks
@@ -331,6 +346,82 @@ def convert_proxy_string_to_dict(proxy: Optional[str]) -> dict:
         return {"http": proxy_url, "https": proxy_url}
 
 
+def get_fresh_proxy(exclude_proxy: Optional[str] = None) -> Optional[str]:
+    """
+    Получить новый прокси, исключая указанный (для ротации).
+    
+    Args:
+        exclude_proxy (Optional[str]): Прокси, который нужно исключить из выбора
+        
+    Returns:
+        Optional[str]: Новый прокси или None если нет альтернатив
+    """
+    global _PROXY_CACHE, _PROXY_CACHE_INITIALIZED
+    
+    logger.info(f"[PROXY] get_fresh_proxy() called, excluding: {exclude_proxy}")
+    
+    # Import db here to avoid circular imports
+    import db
+    
+    # Если кэш не инициализирован, инициализируем его
+    if not _PROXY_CACHE_INITIALIZED:
+        get_random_proxy()  # Это инициализирует кэш
+    
+    # Если нет прокси в кэше
+    if _PROXY_CACHE is None or not _PROXY_CACHE:
+        logger.info(f"[PROXY] No proxies available in cache")
+        return None
+    
+    # Если только один прокси и он исключается
+    if len(_PROXY_CACHE) == 1 and _PROXY_CACHE[0] == exclude_proxy:
+        logger.info(f"[PROXY] Only one proxy available and it's excluded")
+        return None
+    
+    # Фильтруем исключенный прокси
+    available_proxies = [p for p in _PROXY_CACHE if p != exclude_proxy]
+    
+    if not available_proxies:
+        logger.info(f"[PROXY] No alternative proxies available after filtering")
+        return None
+    
+    # Возвращаем случайный из доступных
+    selected_proxy = random.choice(available_proxies)
+    logger.info(f"[PROXY] Selected fresh proxy: {selected_proxy}")
+    return selected_proxy
+
+
+def get_proxy_statistics() -> dict:
+    """
+    Получить статистику использования прокси
+    
+    Returns:
+        dict: Статистика прокси
+    """
+    global _PROXY_CACHE, _PROXY_CACHE_INITIALIZED, _SINGLE_PROXY
+    
+    # Import db here to avoid circular imports
+    import db
+    
+    stats = {
+        "cache_initialized": _PROXY_CACHE_INITIALIZED,
+        "total_cached_proxies": len(_PROXY_CACHE) if _PROXY_CACHE else 0,
+        "single_proxy_mode": _SINGLE_PROXY is not None,
+        "current_single_proxy": _SINGLE_PROXY if _SINGLE_PROXY else None,
+        "proxy_check_enabled": db.get_parameter("check_proxies") == "True",
+        "last_check_time": db.get_parameter("last_proxy_check_time"),
+        "proxy_list_configured": bool(db.get_parameter("proxy_list")),
+        "proxy_link_configured": bool(db.get_parameter("proxy_list_link")),
+        "proxy_recheck_interval_hours": PROXY_RECHECK_INTERVAL / 3600
+    }
+    
+    # Маскируем чувствительные данные
+    if stats["current_single_proxy"] and '@' in str(stats["current_single_proxy"]):
+        import re
+        stats["current_single_proxy"] = re.sub(r'://[^:]+:[^@]+@', '://***:***@', str(stats["current_single_proxy"]))
+    
+    return stats
+
+
 def configure_proxy(session: requests.Session, proxy: Optional[str] = None) -> bool:
     """
     Configure the proxy settings for a requests session.
@@ -357,4 +448,5 @@ def configure_proxy(session: requests.Session, proxy: Optional[str] = None) -> b
 
     # Update the session with the proxy settings
     session.proxies.update(proxy)
+    logger.info(f"[PROXY] Proxy configured for session: {proxy}")
     return True

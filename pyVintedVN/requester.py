@@ -79,16 +79,52 @@ class requester:
         """Настройка прокси"""
         try:
             import proxies
-            logger.info(f"[DEBUG] Configuring proxy for requester...")
+            logger.info(f"[REQUESTER] Configuring proxy for new requester session...")
             proxy_configured = proxies.configure_proxy(self.session)
             if proxy_configured:
-                logger.info(f"[DEBUG] Proxy configured successfully: {self.session.proxies}")
+                # Маскируем чувствительные данные в логах
+                proxy_info = str(self.session.proxies)
+                if '@' in proxy_info:
+                    # Скрываем пароли в логах
+                    import re
+                    proxy_info = re.sub(r'://[^:]+:[^@]+@', '://***:***@', proxy_info)
+                logger.info(f"[REQUESTER] ✅ Proxy configured successfully: {proxy_info}")
             else:
-                logger.info(f"[DEBUG] No proxy configured - using direct connection")
+                logger.info(f"[REQUESTER] ⚠️  No proxy configured - using direct connection")
         except Exception as e:
-            logger.error(f"[DEBUG] Proxy configuration failed: {e}")
+            logger.error(f"[REQUESTER] ❌ Proxy configuration failed: {e}")
             import traceback
-            logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
+            logger.error(f"[REQUESTER] Traceback: {traceback.format_exc()}")
+    
+    def rotate_proxy(self):
+        """Переключение на новый прокси при проблемах с текущим"""
+        try:
+            import proxies
+            logger.info(f"[PROXY] Rotating to new proxy due to connection issues...")
+            
+            # Получаем новый прокси (принудительно, без кэша)
+            new_proxy = proxies.get_fresh_proxy()
+            if new_proxy:
+                # Очищаем старые настройки прокси
+                self.session.proxies.clear()
+                
+                # Настраиваем новый прокси
+                proxy_configured = proxies.configure_proxy(self.session, new_proxy)
+                if proxy_configured:
+                    logger.info(f"[PROXY] Successfully rotated to new proxy: {self.session.proxies}")
+                    return True
+                else:
+                    logger.warning(f"[PROXY] Failed to configure new proxy")
+            else:
+                logger.warning(f"[PROXY] No alternative proxy available for rotation")
+                # Переходим на прямое соединение
+                self.session.proxies.clear()
+                logger.info(f"[PROXY] Switched to direct connection")
+            
+            return False
+        except Exception as e:
+            logger.error(f"[PROXY] Proxy rotation failed: {e}")
+            return False
     
     def get_access_token(self):
         """Получение access_token_web для Bearer авторизации"""
@@ -220,6 +256,15 @@ class requester:
                     if response.status_code == 403 and REDEPLOY_AVAILABLE:
                         report_403_error()
                         logger.warning(f"[REQUESTER] 403 Forbidden error reported to redeploy system")
+                    
+                    # При 403 ошибке пытаемся сменить прокси
+                    if response.status_code == 403 and tried <= 2:  # Пытаемся сменить прокси в первых 2 попытках
+                        logger.info(f"[REQUESTER] 403 error - attempting proxy rotation (try {tried})")
+                        if self.rotate_proxy():
+                            logger.info(f"[REQUESTER] Proxy rotated successfully, retrying request")
+                            continue  # Пробуем еще раз с новым прокси
+                        else:
+                            logger.warning(f"[REQUESTER] Proxy rotation failed, continuing with token refresh")
                     
                     # Пытаемся обновить токен
                     if self.refresh_token_if_needed():

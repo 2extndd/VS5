@@ -1719,6 +1719,21 @@ def redeploy_status():
         logger.error(f"Error getting redeploy status: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/proxy_status')
+def proxy_status():
+    """API endpoint для мониторинга системы прокси"""
+    try:
+        import proxies
+        stats = proxies.get_proxy_statistics()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting proxy status: {e}")
+        return jsonify({
+            "error": str(e),
+            "cache_initialized": False,
+            "total_cached_proxies": 0
+        }), 500
+
 @app.route('/force_redeploy', methods=['POST'])
 def force_redeploy():
     """Принудительный редеплой Railway"""
