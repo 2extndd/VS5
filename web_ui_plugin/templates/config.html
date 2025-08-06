@@ -106,51 +106,50 @@
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <!-- Country Allowlist moved here -->
+                            <!-- Country Allowlist (display only in main form) -->
                             <div class="card h-100">
                                 <div class="card-header d-flex align-items-center">
                                     <i class="bi bi-globe me-2 text-info"></i>
                                     <h5 class="card-title mb-0">Country Allowlist</h5>
                                 </div>
                                 <div class="card-body">
-                                    <!-- Add Country Form -->
-                                    <form action="/add_country" method="post" class="mb-3">
+                                    <div class="mb-3">
+                                        <label class="form-label">Add Country</label>
                                         <div class="input-group input-group-sm">
-                                            <input type="text" class="form-control" name="country" placeholder="DE" 
-                                                   maxlength="2" style="text-transform: uppercase;" required>
-                                            <button type="submit" class="btn btn-outline-primary">
+                                            <input type="text" class="form-control" id="new-country" placeholder="DE" 
+                                                   maxlength="2" style="text-transform: uppercase;">
+                                            <button type="button" class="btn btn-outline-primary" onclick="addCountry()">
                                                 <i class="bi bi-plus"></i> Add
                                             </button>
                                         </div>
                                         <small class="form-text text-muted">2-letter country code (e.g., FR, DE, IT)</small>
-                                    </form>
+                                    </div>
                                     
-                                    <!-- Current Allowlist -->
+                                    <!-- Current Allowlist Display -->
                                     <div class="allowlist-container" style="max-height: 200px; overflow-y: auto;">
-                                        {% if countries %}
-                                            <ul class="list-group list-group-flush">
-                                                {% for country in countries %}
-                                                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                                    <span class="badge bg-secondary">{{ country }}</span>
-                                                    <form action="/remove_country" method="post" class="d-inline">
-                                                        <input type="hidden" name="country" value="{{ country }}">
-                                                        <button type="submit" class="btn btn-outline-danger btn-sm">
+                                        <div id="countries-list">
+                                            {% if countries %}
+                                                <ul class="list-group list-group-flush">
+                                                    {% for country in countries %}
+                                                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                                        <span class="badge bg-secondary">{{ country }}</span>
+                                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeCountry('{{ country }}')">
                                                             <i class="bi bi-x"></i>
                                                         </button>
-                                                    </form>
-                                                </li>
-                                                {% endfor %}
-                                            </ul>
-                                            <div class="text-center mt-2">
-                                                <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#clearAllowlistModal">
-                                                    <i class="bi bi-trash"></i> Clear All
-                                                </button>
-                                            </div>
-                                        {% else %}
-                                            <div class="alert alert-info alert-sm text-center">
-                                                <small><i class="bi bi-info-circle me-1"></i>No countries in allowlist. All countries allowed.</small>
-                                            </div>
-                                        {% endif %}
+                                                    </li>
+                                                    {% endfor %}
+                                                </ul>
+                                                <div class="text-center mt-2">
+                                                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="clearAllowlist()">
+                                                        <i class="bi bi-trash"></i> Clear All
+                                                    </button>
+                                                </div>
+                                            {% else %}
+                                                <div class="alert alert-info alert-sm text-center">
+                                                    <small><i class="bi bi-info-circle me-1"></i>No countries in allowlist. All countries allowed.</small>
+                                                </div>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -196,13 +195,7 @@
                                                     per line)</small>
                                             </div>
                                             
-                                            <!-- Current Proxy Display -->
-                                            <div class="mb-3">
-                                                <label class="form-label">Current Proxy</label>
-                                                <div class="bg-light p-2 rounded border">
-                                                    <small class="text-muted font-monospace" id="current-proxy-display">Loading...</small>
-                                                </div>
-                                            </div>
+
                                         </div>
                                     </div>
                                 </div>
@@ -425,20 +418,21 @@
                 .then(response => response.json())
                 .then(data => {
                     // Update status text
-                    document.querySelector('.process-status[data-process="telegram"]').textContent =
-                        data.telegram ? 'Running' : 'Stopped';
-                    document.querySelector('.process-status[data-process="rss"]').textContent =
-                        data.rss ? 'Running' : 'Stopped';
+                    const telegramStatus = document.querySelector('.process-status[data-process="telegram"]');
+                    if (telegramStatus) {
+                        telegramStatus.textContent = data.telegram ? 'Running' : 'Stopped';
+                    }
 
                     // Update button visibility
-                    document.querySelector('.process-control[data-process="telegram"][data-action="start"]').style.display =
-                        data.telegram ? 'none' : 'inline-block';
-                    document.querySelector('.process-control[data-process="telegram"][data-action="stop"]').style.display =
-                        data.telegram ? 'inline-block' : 'none';
-                    document.querySelector('.process-control[data-process="rss"][data-action="start"]').style.display =
-                        data.rss ? 'none' : 'inline-block';
-                    document.querySelector('.process-control[data-process="rss"][data-action="stop"]').style.display =
-                        data.rss ? 'inline-block' : 'none';
+                    const telegramStartBtn = document.querySelector('.process-control[data-process="telegram"][data-action="start"]');
+                    const telegramStopBtn = document.querySelector('.process-control[data-process="telegram"][data-action="stop"]');
+                    
+                    if (telegramStartBtn) {
+                        telegramStartBtn.style.display = data.telegram ? 'none' : 'inline-block';
+                    }
+                    if (telegramStopBtn) {
+                        telegramStopBtn.style.display = data.telegram ? 'inline-block' : 'none';
+                    }
 
                     // Re-enable buttons
                     document.querySelectorAll('.process-control').forEach(btn => {
@@ -470,6 +464,79 @@
         refreshProxyStatus();
         setInterval(refreshProxyStatus, 45000);
     });
+
+    // Country Allowlist Functions (without forms)
+    function addCountry() {
+        const input = document.getElementById('new-country');
+        const country = input.value.trim().toUpperCase();
+        
+        if (!country || country.length !== 2) {
+            alert('Please enter a valid 2-letter country code');
+            return;
+        }
+        
+        fetch('/add_country', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'country=' + encodeURIComponent(country)
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload(); // Reload to update the display
+            } else {
+                alert('Error adding country');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding country');
+        });
+    }
+    
+    function removeCountry(country) {
+        fetch('/remove_country', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'country=' + encodeURIComponent(country)
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload(); // Reload to update the display
+            } else {
+                alert('Error removing country');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error removing country');
+        });
+    }
+    
+    function clearAllowlist() {
+        if (confirm('Are you sure you want to clear the entire allowlist? This will allow items from all countries.')) {
+            fetch('/clear_allowlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    location.reload(); // Reload to update the display
+                } else {
+                    alert('Error clearing allowlist');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error clearing allowlist');
+            });
+        }
+    }
 
     // Railway Auto-Redeploy Functions
     function refreshRedeployStatus() {
@@ -606,12 +673,6 @@
         }
         
         document.getElementById('proxy-recheck-interval').textContent = (data.proxy_recheck_interval_hours || 6) + ' hours';
-        
-        // Update current proxy display in Proxy Settings
-        const currentProxyDisplay = document.getElementById('current-proxy-display');
-        if (currentProxyDisplay) {
-            currentProxyDisplay.textContent = data.current_single_proxy || 'None';
-        }
     }
 </script>
 {% endblock %}
