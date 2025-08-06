@@ -278,42 +278,10 @@ def index():
     # Get parameters
     params = db.get_all_parameters()
 
-    # Get queries
-    queries = db.get_queries()
-    formatted_queries = []
-    for i, query in enumerate(queries):
-        parsed_query = urlparse(query[1])
-        query_params = parse_qs(parsed_query.query)
-        query_name = query[3] if query[3] is not None else query_params.get('search_text', [None])[0]
+    # Queries section removed from dashboard
 
-        # Get the last timestamp for this query
-        try:
-            last_timestamp = db.get_last_timestamp(query[0])
-            if last_timestamp:
-                # Convert Decimal to float for PostgreSQL compatibility
-                timestamp_float = float(last_timestamp)
-                last_found_item = datetime.fromtimestamp(timestamp_float).strftime('%Y-%m-%d %H:%M:%S')
-            else:
-                last_found_item = "Never"
-        except Exception as e:
-            logger.warning(f"Error formatting timestamp: {e}")
-            last_found_item = "Never"
-
-        # Get thread_id (5th element, index 4) if available
-        thread_id = None
-        if len(query) > 4:
-            thread_id = query[4]
-            
-        formatted_queries.append({
-            'id': i + 1,
-            'query': query[0],
-            'display': query_name if query_name else query[0],
-            'last_found_item': last_found_item,
-            'thread_id': thread_id
-        })
-
-    # Get recent items
-    items = db.get_items(limit=10)
+    # Get recent items (increased limit since we have more space)
+    items = db.get_items(limit=20)
     formatted_items = []
     for item in items:
         try:
@@ -384,10 +352,9 @@ def index():
 
     return render_template('index.html',
                            params=params,
-                           queries=formatted_queries,
                            items=formatted_items,
-                                   telegram_running=telegram_running,
-        # RSS removed
+                           telegram_running=telegram_running,
+                           # RSS removed
                            stats=stats)
 
 
