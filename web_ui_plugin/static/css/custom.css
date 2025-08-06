@@ -91,9 +91,15 @@ main {
 }
 
 #cardView .card-img-top {
-    height: 200px;
+    width: 100%;
+    aspect-ratio: 4/5; /* Vinted-style 4:5 aspect ratio */
     object-fit: cover;
     border-bottom: 1px solid var(--border-color);
+}
+
+/* Placeholder for images without photo */
+#cardView .card-img-top.bg-light {
+    aspect-ratio: 4/5; /* Same 4:5 ratio for placeholders */
 }
 
 #cardView .card-body {

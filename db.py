@@ -28,18 +28,22 @@ def safe_get_result(result, index=0):
 
 def get_db_connection():
     """Get database connection (PostgreSQL if available and configured, otherwise SQLite)"""
+    from logger import get_logger
+    logger = get_logger(__name__)
+    
     # Check if PostgreSQL is configured via environment variables
     if POSTGRES_AVAILABLE and os.getenv('DATABASE_URL'):
         try:
+            logger.debug("Attempting to connect to PostgreSQL...")
             conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+            logger.debug("Successfully connected to PostgreSQL")
             return conn, 'postgresql'
         except Exception as e:
-            from logger import get_logger
-            logger = get_logger(__name__)
             logger.warning(f"Failed to connect to PostgreSQL: {e}")
             logger.info("Falling back to SQLite")
     
     # Default to SQLite
+    logger.debug("Using SQLite database")
     conn = sqlite3.connect("vinted_notifications.db")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn, 'sqlite'
@@ -290,6 +294,22 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
         if is_item_in_db_by_id(id):
             logger.info(f"Item {id} already exists in database, skipping...")
             return False
+        else:
+            logger.info(f"Item {id} is new, proceeding with database insertion...")
+        
+        # Check database size limits (prevent excessive growth)
+        cursor.execute("SELECT COUNT(*) FROM items")
+        total_items = cursor.fetchone()[0]
+        MAX_ITEMS = 50000  # Limit to 50K items to prevent database bloat
+        
+        if total_items >= MAX_ITEMS:
+            logger.warning(f"Database has reached maximum items limit ({MAX_ITEMS}). Consider cleaning old items.")
+            # Clean old items (keep only recent 30000)
+            if db_type == 'postgresql':
+                cursor.execute("DELETE FROM items WHERE item IN (SELECT item FROM items ORDER BY timestamp ASC LIMIT %s)", (total_items - 30000,))
+            else:
+                cursor.execute("DELETE FROM items WHERE item IN (SELECT item FROM items ORDER BY timestamp ASC LIMIT ?)", (total_items - 30000,))
+            logger.info(f"Cleaned old items, keeping most recent 30000")
         
         # Convert price to float for DECIMAL compatibility
         try:
@@ -685,6 +705,62 @@ def get_all_parameters():
         return params
     except Exception:
         print_exc()
+        return {}
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_database_stats():
+    """Get database statistics for debugging"""
+    from logger import get_logger
+    logger = get_logger(__name__)
+    
+    conn = None
+    try:
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
+        
+        stats = {}
+        
+        # Get total items count
+        cursor.execute("SELECT COUNT(*) FROM items")
+        stats['total_items'] = cursor.fetchone()[0]
+        
+        # Get items count per query
+        if db_type == 'postgresql':
+            cursor.execute("""
+                SELECT q.query_name, COUNT(i.item) as item_count 
+                FROM queries q 
+                LEFT JOIN items i ON q.id = i.query_id 
+                GROUP BY q.id, q.query_name
+            """)
+        else:
+            cursor.execute("""
+                SELECT q.query_name, COUNT(i.item) as item_count 
+                FROM queries q 
+                LEFT JOIN items i ON q.id = i.query_id 
+                GROUP BY q.id, q.query_name
+            """)
+            
+        stats['items_per_query'] = cursor.fetchall()
+        
+        # Get recent items (last 24 hours)
+        import time
+        twenty_four_hours_ago = time.time() - 86400
+        
+        if db_type == 'postgresql':
+            cursor.execute("SELECT COUNT(*) FROM items WHERE timestamp > %s", (twenty_four_hours_ago,))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM items WHERE timestamp > ?", (twenty_four_hours_ago,))
+            
+        stats['recent_items_24h'] = cursor.fetchone()[0]
+        
+        logger.info(f"Database stats: {stats}")
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error getting database stats: {e}")
         return {}
     finally:
         if conn:

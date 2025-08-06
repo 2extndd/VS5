@@ -203,6 +203,11 @@ def process_items(queue):
     """
     try:
         logger.info(f"[DEBUG] process_items called - starting execution")
+        
+        # Get database statistics for debugging
+        db_stats = db.get_database_stats()
+        logger.info(f"[DEBUG] Database statistics: {db_stats}")
+        
         all_queries = db.get_queries()
         logger.info(f"[DEBUG] Got {len(all_queries)} queries from database")
 

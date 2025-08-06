@@ -422,7 +422,7 @@ class LeRobot:
         try:
             # Process all items in queue (no infinite loop since it's called every second)
             processed = 0
-            while not self.new_items_queue.empty() and processed < 10:  # Limit to 10 items per call
+            while not self.new_items_queue.empty() and processed < 20:  # Increased limit to 20 items per call
                 queue_item = self.new_items_queue.get()
                 logger.info(f"[TELEGRAM] Processing queue item: {queue_item}")
                 
