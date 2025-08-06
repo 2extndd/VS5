@@ -280,8 +280,8 @@ def index():
 
     # Queries section removed from dashboard
 
-    # Get recent items (increased limit since we have more space)
-    items = db.get_items(limit=20)
+    # Get recent items (increased limit to 42)
+    items = db.get_items(limit=42)
     formatted_items = []
     for item in items:
         try:
