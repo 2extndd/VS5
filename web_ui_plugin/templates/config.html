@@ -261,6 +261,65 @@
     </div>
 </div>
 
+<!-- Railway Auto-Redeploy Monitoring -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex align-items-center">
+                <i class="bi bi-arrow-clockwise me-2 text-warning"></i>
+                <h5 class="card-title mb-0">Railway Auto-Redeploy System</h5>
+                <span class="badge bg-info ms-auto" id="redeploy-status-badge">Loading...</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Status Information</h6>
+                        <div class="mb-2">
+                            <small class="text-muted">403 Errors Count:</small>
+                            <span class="fw-bold ms-2" id="error-count">-</span>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">First 403 Error:</small>
+                            <span class="fw-bold ms-2" id="first-error-time">-</span>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Last 403 Error:</small>
+                            <span class="fw-bold ms-2" id="last-error-time">-</span>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Last Redeploy:</small>
+                            <span class="fw-bold ms-2" id="last-redeploy-time">-</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Configuration</h6>
+                        <div class="mb-2">
+                            <small class="text-muted">Redeploy Threshold:</small>
+                            <span class="fw-bold ms-2" id="redeploy-threshold">4 minutes</span>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Min 403 Errors:</small>
+                            <span class="fw-bold ms-2" id="max-errors">5</span>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Redeploy Needed:</small>
+                            <span class="fw-bold ms-2" id="redeploy-needed">No</span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="refreshRedeployStatus()">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh Status
+                            </button>
+                            <button type="button" class="btn btn-warning btn-sm" onclick="forceRedeploy()" id="force-redeploy-btn">
+                                <i class="bi bi-lightning"></i> Force Redeploy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Clear Allowlist Modal -->
 <div class="modal fade" id="clearAllowlistModal" tabindex="-1" aria-labelledby="clearAllowlistModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -383,6 +442,101 @@
 
         // Initial check
         checkProcessStatus();
+        
+        // Auto-refresh redeploy status every 30 seconds
+        refreshRedeployStatus();
+        setInterval(refreshRedeployStatus, 30000);
     });
+
+    // Railway Auto-Redeploy Functions
+    function refreshRedeployStatus() {
+        fetch('/redeploy_status')
+            .then(response => response.json())
+            .then(data => {
+                updateRedeployStatus(data);
+            })
+            .catch(error => {
+                console.error('Error fetching redeploy status:', error);
+                document.getElementById('redeploy-status-badge').textContent = 'Error';
+                document.getElementById('redeploy-status-badge').className = 'badge bg-danger ms-auto';
+            });
+    }
+
+    function updateRedeployStatus(data) {
+        // Update badge
+        const badge = document.getElementById('redeploy-status-badge');
+        if (data.error) {
+            badge.textContent = 'Unavailable';
+            badge.className = 'badge bg-secondary ms-auto';
+        } else if (data.redeploy_needed) {
+            badge.textContent = 'Redeploy Needed';
+            badge.className = 'badge bg-warning ms-auto';
+        } else if (data.error_403_count > 0) {
+            badge.textContent = 'Monitoring';
+            badge.className = 'badge bg-warning ms-auto';
+        } else {
+            badge.textContent = 'OK';
+            badge.className = 'badge bg-success ms-auto';
+        }
+
+        // Update status information
+        document.getElementById('error-count').textContent = data.error_403_count || '0';
+        document.getElementById('first-error-time').textContent = 
+            data.first_403_time ? new Date(data.first_403_time).toLocaleString() : 'None';
+        document.getElementById('last-error-time').textContent = 
+            data.last_403_time ? new Date(data.last_403_time).toLocaleString() : 'None';
+        document.getElementById('last-redeploy-time').textContent = 
+            data.last_redeploy_time ? new Date(data.last_redeploy_time).toLocaleString() : 'Never';
+        
+        // Update configuration
+        document.getElementById('redeploy-threshold').textContent = 
+            (data.redeploy_threshold_minutes || 4) + ' minutes';
+        document.getElementById('max-errors').textContent = data.max_403_errors || '5';
+        document.getElementById('redeploy-needed').textContent = data.redeploy_needed ? 'Yes' : 'No';
+        
+        // Update redeploy needed styling
+        const redeployNeededElement = document.getElementById('redeploy-needed');
+        if (data.redeploy_needed) {
+            redeployNeededElement.className = 'fw-bold ms-2 text-warning';
+        } else {
+            redeployNeededElement.className = 'fw-bold ms-2 text-success';
+        }
+    }
+
+    function forceRedeploy() {
+        const button = document.getElementById('force-redeploy-btn');
+        const originalText = button.innerHTML;
+        
+        if (!confirm('Are you sure you want to force a Railway redeploy? This will restart the application.')) {
+            return;
+        }
+        
+        button.disabled = true;
+        button.innerHTML = '<i class="bi bi-hourglass-split"></i> Redeploying...';
+        
+        fetch('/force_redeploy', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Railway redeploy initiated successfully!');
+                refreshRedeployStatus();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error initiating redeploy: ' + error.message);
+        })
+        .finally(() => {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
+    }
 </script>
 {% endblock %}

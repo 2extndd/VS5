@@ -5,6 +5,15 @@ from datetime import datetime
 from logger import get_logger
 import configuration_values
 
+# Импорт системы автоматического редеплоя
+try:
+    from railway_redeploy import get_redeploy_status
+    REDEPLOY_MONITORING_AVAILABLE = True
+except ImportError:
+    REDEPLOY_MONITORING_AVAILABLE = False
+    def get_redeploy_status():
+        return {"error": "Railway redeploy system not available"}
+
 # Get logger for this module
 logger = get_logger(__name__)
 
@@ -1698,6 +1707,37 @@ def debug_last_timestamp():
             'message': f'Debug error: {e}'
         })
 
+
+@app.route('/redeploy_status')
+def redeploy_status():
+    """API endpoint для мониторинга системы автоматического редеплоя"""
+    try:
+        status = get_redeploy_status()
+        status['monitoring_available'] = REDEPLOY_MONITORING_AVAILABLE
+        return jsonify(status)
+    except Exception as e:
+        logger.error(f"Error getting redeploy status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/force_redeploy', methods=['POST'])
+def force_redeploy():
+    """Принудительный редеплой Railway"""
+    try:
+        if not REDEPLOY_MONITORING_AVAILABLE:
+            return jsonify({"error": "Railway redeploy system not available"}), 503
+        
+        from railway_redeploy import redeploy_manager
+        
+        # Принудительно вызываем редеплой
+        redeploy_manager._perform_redeploy()
+        
+        flash('Принудительный редеплой Railway инициирован!', 'success')
+        return jsonify({"success": True, "message": "Redeploy initiated"})
+        
+    except Exception as e:
+        logger.error(f"Error during force redeploy: {e}")
+        flash(f'Ошибка при редеплое: {str(e)}', 'error')
+        return jsonify({"error": str(e)}), 500
 
 def web_ui_process():
     logger.info("Web UI process started")

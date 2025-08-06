@@ -6,9 +6,30 @@ import requests
 import uuid
 import random
 import time
+import sys
+import os
 from logger import get_logger
 
+# Добавляем путь для импорта модуля редеплоя
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 logger = get_logger(__name__)
+
+# Импортируем систему автоматического редеплоя
+try:
+    from railway_redeploy import report_403_error, report_success
+    REDEPLOY_AVAILABLE = True
+    logger.info("[REQUESTER] Railway auto-redeploy system loaded")
+except ImportError as e:
+    logger.warning(f"[REQUESTER] Railway auto-redeploy system not available: {e}")
+    REDEPLOY_AVAILABLE = False
+    
+    # Заглушки для функций
+    def report_403_error():
+        pass
+    
+    def report_success():
+        pass
 
 class requester:
     """Рабочий Vinted requester с Bearer авторизацией"""
@@ -187,10 +208,18 @@ class requester:
                     logger.info(f"[DEBUG] Request to {url} returned status {response.status_code}")
                 
                 if response.status_code == 200:
+                    # Сообщаем об успешном запросе для сброса счетчика 403 ошибок
+                    if REDEPLOY_AVAILABLE:
+                        report_success()
                     return response
                 elif response.status_code in (401, 403):
                     if self.debug:
                         logger.info(f"[DEBUG] Auth error {response.status_code}, refreshing token (try {tried}/{self.MAX_RETRIES})")
+                    
+                    # Если это 403 ошибка, сообщаем системе автоматического редеплоя
+                    if response.status_code == 403 and REDEPLOY_AVAILABLE:
+                        report_403_error()
+                        logger.warning(f"[REQUESTER] 403 Forbidden error reported to redeploy system")
                     
                     # Пытаемся обновить токен
                     if self.refresh_token_if_needed():
@@ -199,6 +228,9 @@ class requester:
                     
                     # Если обновление токена не помогло и это последняя попытка
                     if tried == self.MAX_RETRIES:
+                        # Еще раз сообщаем о 403 ошибке перед возвратом
+                        if response.status_code == 403 and REDEPLOY_AVAILABLE:
+                            report_403_error()
                         return response
                 else:
                     # Для других ошибок возвращаем ответ
