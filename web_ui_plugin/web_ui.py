@@ -451,17 +451,7 @@ def add_query():
                 flash('Invalid thread ID. Must be a number.', 'error')
                 return redirect(url_for('queries'))
         
-        message, is_new_query = core.process_query(query, name=query_name if query_name != '' else None)
-        
-        if is_new_query and thread_id_int:
-            # Update thread_id for the newly added query
-            all_queries = db.get_queries()
-            if all_queries:
-                # Find the query we just added (it should be the last one or have the matching query string)
-                for q in all_queries:
-                    if q[1] == query:  # q[1] is the query string
-                        db.update_query_thread_id(q[0], thread_id_int)  # q[0] is the query id
-                        break
+        message, is_new_query = core.process_query(query, name=query_name if query_name != '' else None, thread_id=thread_id_int)
         
         if is_new_query:
             flash(f'Query added: {query}', 'success')

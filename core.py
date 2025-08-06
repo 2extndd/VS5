@@ -7,7 +7,7 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 
-def process_query(query, name=None):
+def process_query(query, name=None, thread_id=None):
     """
     Process a Vinted query URL by:
     1. Parsing the URL and extracting query parameters
@@ -20,6 +20,7 @@ def process_query(query, name=None):
     Args:
         query (str): The Vinted query URL
         name (str, optional): A name for the query. If provided, it will be used as the query name.
+        thread_id (int, optional): Telegram thread ID for this query.
 
     Returns:
         tuple: (message, is_new_query)
@@ -50,7 +51,7 @@ def process_query(query, name=None):
         return "Query already exists.", False
     else:
         # add the query to the db
-        db.add_query_to_db(processed_query, name)
+        db.add_query_to_db(processed_query, name, thread_id)
         return "Query added.", True
 
 def get_formatted_query_list():
