@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+:root {
+  --vinted-teal: #09B1BA;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: #fafafa;
+}

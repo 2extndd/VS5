@@ -134,3 +134,12 @@ This project is licensed under the [GNU AFFERO GENERAL PUBLIC LICENSE](LICENSE).
 ## 🙏 Acknowledgements
 
 - Thanks to [@herissondev](https://github.com/herissondev) for maintaining pyVinted, a core dependency of this project.
+
+## New experimental UI (v0-ui)
+
+A Next.js (v0.dev) UI lives under `v0-ui/` and can run in parallel with the Flask UI.
+
+- Dev: `cd v0-ui && pnpm install && pnpm dev` (runs on http://localhost:3100)
+- Build: `pnpm build` and `pnpm start`
+
+This UI is a work-in-progress redesign that preserves existing sections (Dashboard, Items, Queries, Configuration, Logs) with a modern responsive layout.
