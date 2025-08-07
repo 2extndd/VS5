@@ -452,4 +452,26 @@
         </div>
     </div>
 </div>
+
+<script>
+// Автообновление дашборда каждые 30 секунд
+setInterval(function() {
+    // Обновляем только если пользователь активен на странице
+    if (document.visibilityState === 'visible') {
+        location.reload();
+    }
+}, 30000); // 30 секунд
+
+// Показываем индикатор автообновления
+document.addEventListener('DOMContentLoaded', function() {
+    // Добавляем индикатор в заголовок
+    const header = document.querySelector('h1.h2');
+    if (header) {
+        const indicator = document.createElement('small');
+        indicator.className = 'text-muted ms-2';
+        indicator.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Auto-refresh: 30s';
+        header.appendChild(indicator);
+    }
+});
+</script>
 {% endblock %}
