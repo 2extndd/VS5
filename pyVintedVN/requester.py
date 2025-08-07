@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 # Импортируем систему автоматического редеплоя
 try:
-    from railway_redeploy import report_403_error, report_success
+    from railway_redeploy import report_403_error, report_401_error, report_429_error, report_success
     REDEPLOY_AVAILABLE = True
     logger.info("[REQUESTER] Railway auto-redeploy system loaded")
 except ImportError as e:
@@ -26,6 +26,12 @@ except ImportError as e:
     
     # Заглушки для функций
     def report_403_error():
+        pass
+    
+    def report_401_error():
+        pass
+    
+    def report_429_error():
         pass
     
     def report_success():
@@ -252,10 +258,14 @@ class requester:
                     if self.debug:
                         logger.info(f"[DEBUG] Auth error {response.status_code}, refreshing token (try {tried}/{self.MAX_RETRIES})")
                     
-                    # Если это 403 ошибка, сообщаем системе автоматического редеплоя
-                    if response.status_code == 403 and REDEPLOY_AVAILABLE:
-                        report_403_error()
-                        logger.warning(f"[REQUESTER] 403 Forbidden error reported to redeploy system")
+                    # Сообщаем системе автоматического редеплоя о соответствующей ошибке
+                    if REDEPLOY_AVAILABLE:
+                        if response.status_code == 401:
+                            report_401_error()
+                            logger.warning(f"[REQUESTER] 401 Unauthorized error reported to redeploy system")
+                        elif response.status_code == 403:
+                            report_403_error()
+                            logger.warning(f"[REQUESTER] 403 Forbidden error reported to redeploy system")
                     
                     # При 403 ошибке пытаемся сменить прокси
                     if response.status_code == 403 and tried <= 2:  # Пытаемся сменить прокси в первых 2 попытках
@@ -273,10 +283,19 @@ class requester:
                     
                     # Если обновление токена не помогло и это последняя попытка
                     if tried == self.MAX_RETRIES:
-                        # Еще раз сообщаем о 403 ошибке перед возвратом
-                        if response.status_code == 403 and REDEPLOY_AVAILABLE:
-                            report_403_error()
+                        # Еще раз сообщаем об ошибке перед возвратом
+                        if REDEPLOY_AVAILABLE:
+                            if response.status_code == 401:
+                                report_401_error()
+                            elif response.status_code == 403:
+                                report_403_error()
                         return response
+                elif response.status_code == 429:
+                    # Too Many Requests - сообщаем системе редеплоя
+                    if REDEPLOY_AVAILABLE:
+                        report_429_error()
+                        logger.warning(f"[REQUESTER] 429 Too Many Requests error reported to redeploy system")
+                    return response
                 else:
                     # Для других ошибок возвращаем ответ
                     return response

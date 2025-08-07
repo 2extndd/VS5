@@ -229,17 +229,32 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6 class="text-muted">Status Information</h6>
+                        <h6 class="text-muted">HTTP Errors Status</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <small class="text-muted d-block">403 Errors:</small>
+                                <span class="fw-bold text-danger" id="error-403-count">-</span>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted d-block">401 Errors:</small>
+                                <span class="fw-bold text-warning" id="error-401-count">-</span>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted d-block">429 Errors:</small>
+                                <span class="fw-bold text-info" id="error-429-count">-</span>
+                            </div>
+                        </div>
+                        <hr>
                         <div class="mb-2">
-                            <small class="text-muted">403 Errors Count:</small>
-                            <span class="fw-bold ms-2" id="error-count">-</span>
+                            <small class="text-muted">Total Errors:</small>
+                            <span class="fw-bold ms-2" id="total-error-count">-</span>
                         </div>
                         <div class="mb-2">
-                            <small class="text-muted">First 403 Error:</small>
+                            <small class="text-muted">First Error:</small>
                             <span class="fw-bold ms-2" id="first-error-time">-</span>
                         </div>
                         <div class="mb-2">
-                            <small class="text-muted">Last 403 Error:</small>
+                            <small class="text-muted">Last Error:</small>
                             <span class="fw-bold ms-2" id="last-error-time">-</span>
                         </div>
                         <div class="mb-2">
@@ -254,7 +269,7 @@
                             <span class="fw-bold ms-2" id="redeploy-threshold">4 minutes</span>
                         </div>
                         <div class="mb-2">
-                            <small class="text-muted">Min 403 Errors:</small>
+                            <small class="text-muted">Min HTTP Errors:</small>
                             <span class="fw-bold ms-2" id="max-errors">5</span>
                         </div>
                         <div class="mb-3">
@@ -560,8 +575,8 @@
             badge.className = 'badge bg-secondary ms-auto';
         } else if (data.redeploy_needed) {
             badge.textContent = 'Redeploy Needed';
-            badge.className = 'badge bg-warning ms-auto';
-        } else if (data.error_403_count > 0) {
+            badge.className = 'badge bg-danger ms-auto';
+        } else if (data.total_errors > 0) {
             badge.textContent = 'Monitoring';
             badge.className = 'badge bg-warning ms-auto';
         } else {
@@ -569,25 +584,42 @@
             badge.className = 'badge bg-success ms-auto';
         }
 
-        // Update status information
-        document.getElementById('error-count').textContent = data.error_403_count || '0';
+        // Update HTTP errors counts
+        document.getElementById('error-403-count').textContent = data.error_403_count || '0';
+        document.getElementById('error-401-count').textContent = data.error_401_count || '0';
+        document.getElementById('error-429-count').textContent = data.error_429_count || '0';
+        document.getElementById('total-error-count').textContent = data.total_errors || '0';
+        
+        // Find the earliest and latest error times from all error types
+        const errorTimes = [
+            data.first_403_time, data.first_401_time, data.first_429_time
+        ].filter(t => t != null);
+        const lastErrorTimes = [
+            data.last_403_time, data.last_401_time, data.last_429_time
+        ].filter(t => t != null);
+        
+        const firstErrorTime = errorTimes.length > 0 ? 
+            new Date(Math.min(...errorTimes.map(t => new Date(t).getTime()))) : null;
+        const lastErrorTime = lastErrorTimes.length > 0 ? 
+            new Date(Math.max(...lastErrorTimes.map(t => new Date(t).getTime()))) : null;
+        
         document.getElementById('first-error-time').textContent = 
-            data.first_403_time ? new Date(data.first_403_time).toLocaleString() : 'None';
+            firstErrorTime ? firstErrorTime.toLocaleString() : 'None';
         document.getElementById('last-error-time').textContent = 
-            data.last_403_time ? new Date(data.last_403_time).toLocaleString() : 'None';
+            lastErrorTime ? lastErrorTime.toLocaleString() : 'None';
         document.getElementById('last-redeploy-time').textContent = 
             data.last_redeploy_time ? new Date(data.last_redeploy_time).toLocaleString() : 'Never';
         
         // Update configuration
         document.getElementById('redeploy-threshold').textContent = 
             (data.redeploy_threshold_minutes || 4) + ' minutes';
-        document.getElementById('max-errors').textContent = data.max_403_errors || '5';
+        document.getElementById('max-errors').textContent = data.max_http_errors || '5';
         document.getElementById('redeploy-needed').textContent = data.redeploy_needed ? 'Yes' : 'No';
         
         // Update redeploy needed styling
         const redeployNeededElement = document.getElementById('redeploy-needed');
         if (data.redeploy_needed) {
-            redeployNeededElement.className = 'fw-bold ms-2 text-warning';
+            redeployNeededElement.className = 'fw-bold ms-2 text-danger';
         } else {
             redeployNeededElement.className = 'fw-bold ms-2 text-success';
         }

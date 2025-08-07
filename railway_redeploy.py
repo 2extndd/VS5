@@ -27,12 +27,21 @@ class RailwayRedeployManager:
         self.service_id = os.getenv('RAILWAY_SERVICE_ID')  # Нужно будет получить
         self.api_token = os.getenv('RAILWAY_TOKEN')
         
-        # Отслеживание 403 ошибок
+        # Отслеживание HTTP ошибок
         self.error_403_count = 0
         self.first_403_time = None
         self.last_403_time = None
+        
+        self.error_401_count = 0
+        self.first_401_time = None
+        self.last_401_time = None
+        
+        self.error_429_count = 0
+        self.first_429_time = None
+        self.last_429_time = None
+        
         self.redeploy_threshold_minutes = 4
-        self.max_403_errors = 5  # Минимальное количество 403 ошибок подряд
+        self.max_http_errors = 5  # Минимальное количество HTTP ошибок подряд (любых: 401, 403, 429)
         
         # Защита от частых редеплоев
         self.last_redeploy_time = self._load_last_redeploy_time()
@@ -85,38 +94,91 @@ class RailwayRedeployManager:
             # Проверяем, нужно ли делать редеплой
             self._check_redeploy_needed()
     
-    def report_success(self):
-        """Сообщить об успешном запросе (сбросить счетчик 403 ошибок)"""
+    def report_401_error(self):
+        """Сообщить о получении 401 ошибки"""
         with self.lock:
-            if self.error_403_count > 0:
-                logger.info(f"[REDEPLOY] Connection restored! Resetting 403 error counter (was {self.error_403_count})")
+            current_time = datetime.now()
+            
+            # Если это первая 401 ошибка или прошло много времени с последней
+            if self.first_401_time is None or (current_time - self.last_401_time).total_seconds() > 300:  # 5 минут
+                self.first_401_time = current_time
+                self.error_401_count = 1
+                logger.warning(f"[REDEPLOY] First 401 error detected at {current_time}")
+            else:
+                self.error_401_count += 1
+                logger.warning(f"[REDEPLOY] 401 error #{self.error_401_count} detected at {current_time}")
+            
+            self.last_401_time = current_time
+            
+            # Проверяем, нужно ли делать редеплой
+            self._check_redeploy_needed()
+    
+    def report_429_error(self):
+        """Сообщить о получении 429 ошибки"""
+        with self.lock:
+            current_time = datetime.now()
+            
+            # Если это первая 429 ошибка или прошло много времени с последней
+            if self.first_429_time is None or (current_time - self.last_429_time).total_seconds() > 300:  # 5 минут
+                self.first_429_time = current_time
+                self.error_429_count = 1
+                logger.warning(f"[REDEPLOY] First 429 error detected at {current_time}")
+            else:
+                self.error_429_count += 1
+                logger.warning(f"[REDEPLOY] 429 error #{self.error_429_count} detected at {current_time}")
+            
+            self.last_429_time = current_time
+            
+            # Проверяем, нужно ли делать редеплой
+            self._check_redeploy_needed()
+    
+    def report_success(self):
+        """Сообщить об успешном запросе (сбросить счетчики всех ошибок)"""
+        with self.lock:
+            total_errors = self.error_403_count + self.error_401_count + self.error_429_count
+            if total_errors > 0:
+                logger.info(f"[REDEPLOY] Connection restored! Resetting error counters - 403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count}")
+                # Сброс 403 ошибок
                 self.error_403_count = 0
                 self.first_403_time = None
                 self.last_403_time = None
+                # Сброс 401 ошибок
+                self.error_401_count = 0
+                self.first_401_time = None
+                self.last_401_time = None
+                # Сброс 429 ошибок
+                self.error_429_count = 0
+                self.first_429_time = None
+                self.last_429_time = None
     
     def _check_redeploy_needed(self):
         """Проверить, нужен ли редеплой"""
-        if self.first_403_time is None:
+        # Находим самую раннюю ошибку из всех типов
+        first_error_times = [t for t in [self.first_403_time, self.first_401_time, self.first_429_time] if t is not None]
+        if not first_error_times:
             return
         
+        first_error_time = min(first_error_times)
+        total_errors = self.error_403_count + self.error_401_count + self.error_429_count
+        
         current_time = datetime.now()
-        time_since_first_error = current_time - self.first_403_time
+        time_since_first_error = current_time - first_error_time
         
         # Условия для редеплоя:
-        # 1. Прошло больше threshold_minutes с первой 403 ошибки
-        # 2. Получено достаточно 403 ошибок
+        # 1. Прошло больше threshold_minutes с первой HTTP ошибки (любой: 401, 403, 429)
+        # 2. Получено достаточно HTTP ошибок суммарно
         # 3. С последнего редеплоя прошло достаточно времени
         
         if (time_since_first_error.total_seconds() >= self.redeploy_threshold_minutes * 60 and 
-            self.error_403_count >= self.max_403_errors):
+            total_errors >= self.max_http_errors):
             
             # Проверяем, не делали ли редеплой недавно
             if (self.last_redeploy_time is None or 
                 (current_time - self.last_redeploy_time).total_seconds() >= self.min_redeploy_interval_minutes * 60):
                 
                 logger.critical(f"[REDEPLOY] Redeploy conditions met:")
-                logger.critical(f"[REDEPLOY] - Time since first 403: {time_since_first_error}")
-                logger.critical(f"[REDEPLOY] - Total 403 errors: {self.error_403_count}")
+                logger.critical(f"[REDEPLOY] - Time since first error: {time_since_first_error}")
+                logger.critical(f"[REDEPLOY] - Total HTTP errors: {total_errors} (403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count})")
                 logger.critical(f"[REDEPLOY] - Initiating automatic redeploy...")
                 
                 self._perform_redeploy()
@@ -331,31 +393,59 @@ class RailwayRedeployManager:
     
     def _reset_error_tracking(self):
         """Сбросить отслеживание ошибок после успешного редеплоя"""
+        # Сброс 403 ошибок
         self.error_403_count = 0
         self.first_403_time = None
         self.last_403_time = None
-        logger.info("[REDEPLOY] Error tracking reset after redeploy")
+        # Сброс 401 ошибок
+        self.error_401_count = 0
+        self.first_401_time = None
+        self.last_401_time = None
+        # Сброс 429 ошибок
+        self.error_429_count = 0
+        self.first_429_time = None
+        self.last_429_time = None
+        logger.info("[REDEPLOY] All error tracking reset after redeploy")
     
     def get_status(self):
         """Получить текущий статус системы редеплоя"""
         with self.lock:
             current_time = datetime.now()
             
+            # Находим самую раннюю ошибку из всех типов
+            first_error_times = [t for t in [self.first_403_time, self.first_401_time, self.first_429_time] if t is not None]
+            first_error_time = min(first_error_times) if first_error_times else None
+            total_errors = self.error_403_count + self.error_401_count + self.error_429_count
+            
             status = {
+                # 403 ошибки
                 "error_403_count": self.error_403_count,
                 "first_403_time": self.first_403_time.isoformat() if self.first_403_time else None,
                 "last_403_time": self.last_403_time.isoformat() if self.last_403_time else None,
+                
+                # 401 ошибки
+                "error_401_count": self.error_401_count,
+                "first_401_time": self.first_401_time.isoformat() if self.first_401_time else None,
+                "last_401_time": self.last_401_time.isoformat() if self.last_401_time else None,
+                
+                # 429 ошибки
+                "error_429_count": self.error_429_count,
+                "first_429_time": self.first_429_time.isoformat() if self.first_429_time else None,
+                "last_429_time": self.last_429_time.isoformat() if self.last_429_time else None,
+                
+                # Общая информация
+                "total_errors": total_errors,
                 "last_redeploy_time": self.last_redeploy_time.isoformat() if self.last_redeploy_time else None,
                 "redeploy_threshold_minutes": self.redeploy_threshold_minutes,
-                "max_403_errors": self.max_403_errors
+                "max_http_errors": self.max_http_errors
             }
             
-            if self.first_403_time:
-                time_since_first = current_time - self.first_403_time
-                status["time_since_first_403_seconds"] = time_since_first.total_seconds()
+            if first_error_time:
+                time_since_first = current_time - first_error_time
+                status["time_since_first_error_seconds"] = time_since_first.total_seconds()
                 status["redeploy_needed"] = (
                     time_since_first.total_seconds() >= self.redeploy_threshold_minutes * 60 and
-                    self.error_403_count >= self.max_403_errors
+                    total_errors >= self.max_http_errors
                 )
             
             return status
@@ -366,6 +456,14 @@ redeploy_manager = RailwayRedeployManager()
 def report_403_error():
     """Функция для сообщения о 403 ошибке"""
     redeploy_manager.report_403_error()
+
+def report_401_error():
+    """Функция для сообщения о 401 ошибке"""
+    redeploy_manager.report_401_error()
+
+def report_429_error():
+    """Функция для сообщения о 429 ошибке"""
+    redeploy_manager.report_429_error()
 
 def report_success():
     """Функция для сообщения об успешном запросе"""
