@@ -484,42 +484,37 @@ def update_query_thread_id(query_id, thread_id):
             conn.close()
 
 
-def remove_query_from_db(query_number):
+def remove_query_from_db(query_id):
+    """Remove query by ID (not row number)"""
     conn = None
     try:
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
         
+        # Convert query_id to int if it's a string
+        try:
+            query_id = int(query_id)
+        except (ValueError, TypeError):
+            print(f"Invalid query_id: {query_id}")
+            return
+        
         if db_type == 'postgresql':
-            # Get the query and its ID based on the row number
-            cursor.execute("""
-                SELECT id, query FROM (
-                    SELECT id, query, ROW_NUMBER() OVER (ORDER BY id) rn 
-                    FROM queries
-                ) t WHERE rn=%s
-            """, (query_number,))
-            query_result = cursor.fetchone()
-            
-            if query_result:
-                query_id = safe_get_result(query_result, 0)
-                # Delete items associated with this query using query_id
-                cursor.execute("DELETE FROM items WHERE query_id=%s", (query_id,))
-                # Delete the query
-                cursor.execute("DELETE FROM queries WHERE id=%s", (query_id,))
-                conn.commit()
+            # Delete items associated with this query first
+            cursor.execute("DELETE FROM items WHERE query_id=%s", (query_id,))
+            # Delete the query
+            cursor.execute("DELETE FROM queries WHERE id=%s", (query_id,))
+            conn.commit()
+            print(f"Removed query with ID {query_id} from PostgreSQL database")
         else:
-            # Get the query and its ID based on the row number
-            query_string = f"SELECT id, query, rowid FROM (SELECT id, query, rowid, ROW_NUMBER() OVER (ORDER BY ROWID) rn FROM queries) t WHERE rn={query_number}"
-            cursor.execute(query_string)
-            query_result = cursor.fetchone()
-            if query_result:
-                query_id, query_text, rowid = query_result
-                # Delete items associated with this query using query_id
-                cursor.execute("DELETE FROM items WHERE query_id=?", (query_id,))
-                # Delete the query
-                cursor.execute("DELETE FROM queries WHERE ROWID=?", (rowid,))
-                conn.commit()
-    except Exception:
+            # Delete items associated with this query first
+            cursor.execute("DELETE FROM items WHERE query_id=?", (query_id,))
+            # Delete the query
+            cursor.execute("DELETE FROM queries WHERE id=?", (query_id,))
+            conn.commit()
+            print(f"Removed query with ID {query_id} from SQLite database")
+            
+    except Exception as e:
+        print(f"Error removing query {query_id}: {e}")
         print_exc()
     finally:
         if conn:

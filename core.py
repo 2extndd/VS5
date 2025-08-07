@@ -80,28 +80,30 @@ def get_formatted_query_list():
     return query_list
 
 
-def process_remove_query(number):
+def process_remove_query(query_id):
     """
     Process the removal of a query from the database.
 
     Args:
-        number (str): The number of the query to remove or "all" to remove all queries
+        query_id (str): The ID of the query to remove or "all" to remove all queries
 
     Returns:
         tuple: (message, success)
             - message (str): Status message
             - success (bool): True if query was removed successfully
     """
-    if number == "all":
+    if query_id == "all":
         db.remove_all_queries_from_db()
         return "All queries removed.", True
 
-    # Check if number is a valid digit
-    if not number[0].isdigit():
-        return "Invalid number.", False
+    # Validate query_id
+    try:
+        int(query_id)
+    except (ValueError, TypeError):
+        return "Invalid query ID.", False
 
     # Remove the query from the database
-    db.remove_query_from_db(number)
+    db.remove_query_from_db(query_id)
     return "Query removed.", True
 
 
