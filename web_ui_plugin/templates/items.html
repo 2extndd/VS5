@@ -10,10 +10,12 @@
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="card">
-            <div class="card-header d-flex align-items-center">
+            <div class="card-header d-flex align-items-center" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse" style="cursor: pointer;">
                 <i class="bi bi-funnel-fill me-2 text-info"></i>
                 <h5 class="card-title mb-0">Filter Items</h5>
+                <i class="bi bi-chevron-down ms-auto"></i>
             </div>
+            <div class="collapse" id="filterCollapse">
             <div class="card-body">
                 <form action="/items" method="get">
                     <div class="row">
@@ -51,6 +53,7 @@
                     </div>
                 </form>
             </div>
+            </div>
         </div>
     </div>
 </div>
@@ -82,7 +85,7 @@
                 <!-- Card View -->
                 <div class="row" id="cardView">
                     {% for item in items %}
-                    <div class="col-md-3 col-lg-2 mb-4">
+                    <div class="col-md-4 col-lg-3 mb-4">
                         <div class="card h-100">
                             {% if item.photo_url %}
                             <a href="https://www.vinted.de/items/{{ item.id }}" target="_blank" class="text-decoration-none">
@@ -98,12 +101,12 @@
                             <div class="card-body p-3">
                                 <h6 class="card-title mb-2">
                                     {{ item.title }}
-                                    {% if item.is_recent %}
-                                    <span class="badge bg-warning text-dark ms-1">NEW</span>
-                                    {% endif %}
                                 </h6>
                                 <p class="card-text mb-1">
                                     <span class="fw-bold text-dark" style="font-size: 1.1rem;">{{ item.price }} {{ item.currency }}</span>
+                                    {% if item.brand_title %}
+                                    <br><small class="text-muted">{{ item.brand_title }}</small>
+                                    {% endif %}
                                 </p>
                                 <p class="card-text small text-muted mb-0">
                                     <i class="bi bi-clock me-1"></i> 
@@ -112,7 +115,7 @@
                             </div>
                             <div class="card-footer bg-white p-3">
                                 <a href="{{ item.url }}" target="_blank" class="btn btn-primary w-100">
-                                    <i class="bi bi-box-arrow-up-right me-1"></i> View on Vinted
+                                    View
                                 </a>
                             </div>
                         </div>
@@ -153,16 +156,18 @@
                             </td>
                             <td>
                                 {{ item.title }}
-                                {% if item.is_recent %}
-                                <span class="badge bg-warning text-dark ms-1">NEW</span>
+                            </td>
+                            <td>
+                                {{ item.price }} {{ item.currency }}
+                                {% if item.brand_title %}
+                                <br><small class="text-muted">{{ item.brand_title }}</small>
                                 {% endif %}
                             </td>
-                            <td>{{ item.price }} {{ item.currency }}</td>
                             <td>{{ item.query|truncate(30) }}</td>
                             <td><span class="badge bg-success">{{ item.timestamp }}</span></td>
                             <td>
                                 <a href="{{ item.url }}" target="_blank" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-box-arrow-up-right me-1"></i> View on Vinted
+                                    View
                                 </a>
                             </td>
                         </tr>

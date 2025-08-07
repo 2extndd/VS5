@@ -20,13 +20,14 @@ CREATE TABLE IF NOT EXISTS queries
 -- Items table
 CREATE TABLE IF NOT EXISTS items
 (
-    item      NUMERIC,
-    title     TEXT,
-    price     NUMERIC,
-    currency  TEXT,
-    timestamp NUMERIC,
-    photo_url TEXT,
-    query_id  INTEGER,
+    item       NUMERIC,
+    title      TEXT,
+    price      NUMERIC,
+    currency   TEXT,
+    timestamp  NUMERIC,
+    photo_url  TEXT,
+    brand_title TEXT,
+    query_id   INTEGER,
     FOREIGN KEY (query_id) REFERENCES queries (id)
 );
 

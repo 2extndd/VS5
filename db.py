@@ -279,7 +279,7 @@ def update_last_timestamp(query_id, timestamp):
             conn.close()
 
 
-def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="EUR"):
+def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="EUR", brand_title=""):
     from logger import get_logger
     logger = get_logger(__name__)
     
@@ -321,15 +321,15 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
         if db_type == 'postgresql':
             # Insert into db the id and the query_id related to the item
             cursor.execute(
-                "INSERT INTO items (item, title, price, currency, timestamp, photo_url, query_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (id, title, price_decimal, currency, timestamp, photo_url, query_id))
+                "INSERT INTO items (item, title, price, currency, timestamp, photo_url, brand_title, query_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (id, title, price_decimal, currency, timestamp, photo_url, brand_title, query_id))
             # Update the last item for the query
             cursor.execute("UPDATE queries SET last_item=%s WHERE id=%s", (timestamp, query_id))
         else:
             # Insert into db the id and the query_id related to the item
             cursor.execute(
-                "INSERT INTO items (item, title, price, currency, timestamp, photo_url, query_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (id, title, price_decimal, currency, timestamp, photo_url, query_id))
+                "INSERT INTO items (item, title, price, currency, timestamp, photo_url, brand_title, query_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (id, title, price_decimal, currency, timestamp, photo_url, brand_title, query_id))
             # Update the last item for the query
             cursor.execute("UPDATE queries SET last_item=? WHERE id=?", (timestamp, query_id))
             
@@ -778,13 +778,13 @@ def get_items(limit=50, query=None):
                     # Get items with the matching query_id
                     if limit is None:
                         cursor.execute("""
-                            SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url 
+                            SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title 
                             FROM items i JOIN queries q ON i.query_id = q.id 
                             WHERE i.query_id=%s ORDER BY i.timestamp DESC
                         """, (query_id,))
                     else:
                         cursor.execute("""
-                            SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url 
+                            SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title 
                             FROM items i JOIN queries q ON i.query_id = q.id 
                             WHERE i.query_id=%s ORDER BY i.timestamp DESC LIMIT %s
                         """, (query_id, limit))
@@ -799,11 +799,11 @@ def get_items(limit=50, query=None):
                     # Get items with the matching query_id
                     if limit is None:
                         cursor.execute(
-                            "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC",
+                            "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC",
                             (query_id,))
                     else:
                         cursor.execute(
-                            "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC LIMIT ?",
+                            "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC LIMIT ?",
                             (query_id, limit))
                 else:
                     return []
@@ -812,13 +812,13 @@ def get_items(limit=50, query=None):
                 # Join with queries table to get the query text
                 if limit is None:
                     cursor.execute("""
-                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url 
+                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title 
                         FROM items i JOIN queries q ON i.query_id = q.id 
                         ORDER BY i.timestamp DESC
                     """)
                 else:
                     cursor.execute("""
-                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url 
+                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title 
                         FROM items i JOIN queries q ON i.query_id = q.id 
                         ORDER BY i.timestamp DESC LIMIT %s
                     """, (limit,))
@@ -826,10 +826,10 @@ def get_items(limit=50, query=None):
                 # Join with queries table to get the query text
                 if limit is None:
                     cursor.execute(
-                        "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC")
+                        "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC")
                 else:
                     cursor.execute(
-                        "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC LIMIT ?",
+                        "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC LIMIT ?",
                         (limit,))
                     
         return cursor.fetchall()

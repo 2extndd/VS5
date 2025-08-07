@@ -88,47 +88,7 @@
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-speedometer2 me-2 text-info"></i>
-                    <h5 class="card-title mb-0">Process Status</h5>
-                </div>
-                <button class="btn btn-primary btn-sm" id="forceScanBtn">
-                    <i class="bi bi-arrow-clockwise me-1"></i>Force Scan All
-                </button>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                <h6 class="mb-0">Telegram Bot</h6>
-                                <small class="text-muted">{{ 'Running' if telegram_running else 'Stopped' }}</small>
-                            </div>
-                            <div>
-                                {% if telegram_running %}
-                                <button class="btn btn-sm btn-danger process-control" data-process="telegram"
-                                        data-action="stop">
-                                    <i class="bi bi-stop-fill"></i> Stop
-                                </button>
-                                {% else %}
-                                <button class="btn btn-sm btn-success process-control" data-process="telegram"
-                                        data-action="start">
-                                    <i class="bi bi-play-fill"></i> Start
-                                </button>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    <!-- RSS Feed section removed -->
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <div class="row">
     <div class="col-md-12">
@@ -139,6 +99,9 @@
                     <h5 class="card-title mb-0">Recent Items</h5>
                 </div>
                 <div class="d-flex align-items-center">
+                    <button class="btn btn-primary btn-sm me-2" id="forceScanBtn">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Force Scan All
+                    </button>
                     <div class="btn-group me-2" role="group" aria-label="View toggle">
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="cardViewBtn">
                             <i class="bi bi-grid-3x3-gap-fill"></i> Cards
@@ -157,7 +120,7 @@
                 <!-- Card View -->
                 <div class="row" id="cardView">
                     {% for item in items %}
-                    <div class="col-md-3 col-lg-2 mb-3">
+                    <div class="col-md-4 col-lg-3 mb-3">
                         <div class="card h-100">
                             {% if item.photo_url %}
                             <a href="https://www.vinted.de/items/{{ item.id }}" target="_blank" class="text-decoration-none">
@@ -177,6 +140,7 @@
                                     <strong>{{ item.title }}</strong></h6>
                                 <p class="card-text small mb-1">
                                     Price: {{ item.price }} {{ item.currency }}<br>
+                                    {% if item.brand_title %}<small class="text-muted">{{ item.brand_title }}</small><br>{% endif %}
                                     Date: {{ item.timestamp }}
                                 </p>
                             </div>
@@ -222,12 +186,15 @@
                                 {% endif %}
                             </td>
                             <td>{{ item.title }}</td>
-                            <td>{{ item.price }} {{ item.currency }}</td>
+                            <td>
+                                {{ item.price }} {{ item.currency }}
+                                {% if item.brand_title %}<br><small class="text-muted">{{ item.brand_title }}</small>{% endif %}
+                            </td>
                             <td>{{ item.timestamp }}</td>
                             <td>
                                 <a href="https://www.vinted.de/items/{{ item.id }}" target="_blank"
                                    class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-box-arrow-up-right"></i> View
+                                    View
                                 </a>
                             </td>
                         </tr>

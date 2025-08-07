@@ -315,7 +315,8 @@ def clear_item_queue(items_queue, new_items_queue):
                     # Add the item to the db
                     logger.info(f"[DEBUG] Adding item to database: {item.id}")
                     db.add_item_to_db(id=item.id, title=item.title, query_id=query_id, price=item.price, 
-                                      timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency)
+                                      timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency, 
+                                      brand_title=item.brand_title)
                     logger.info(f"[DEBUG] Item {item.id} successfully added to database!")
                     
                     # Update the query's last_found timestamp
