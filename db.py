@@ -885,7 +885,7 @@ def get_last_found_item():
             """)
         else:
             cursor.execute(
-                "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC LIMIT 1")
+                "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC LIMIT 1")
                 
         return cursor.fetchone()
     except Exception:
