@@ -37,6 +37,24 @@ def get_db_connection():
             logger.debug("Attempting to connect to PostgreSQL...")
             conn = psycopg2.connect(os.getenv('DATABASE_URL'))
             logger.debug("Successfully connected to PostgreSQL")
+            
+            # Auto-migrate: add brand_title column if it doesn't exist
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    DO $$ 
+                    BEGIN 
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                       WHERE table_name = 'items' AND column_name = 'brand_title') THEN
+                            ALTER TABLE items ADD COLUMN brand_title TEXT DEFAULT '';
+                        END IF;
+                    END $$;
+                """)
+                conn.commit()
+                logger.info("Auto-migration: brand_title column checked/added")
+            except Exception as e:
+                logger.warning(f"Auto-migration failed: {e}")
+            
             return conn, 'postgresql'
         except Exception as e:
             logger.warning(f"Failed to connect to PostgreSQL: {e}")
@@ -46,6 +64,23 @@ def get_db_connection():
     logger.debug("Using SQLite database")
     conn = sqlite3.connect("vinted_notifications.db")
     conn.execute("PRAGMA foreign_keys = ON")
+    
+    # Auto-migrate: add brand_title column if it doesn't exist
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(items)")
+        columns = cursor.fetchall()
+        column_names = [col[1] for col in columns]
+        
+        if 'brand_title' not in column_names:
+            cursor.execute("ALTER TABLE items ADD COLUMN brand_title TEXT DEFAULT ''")
+            conn.commit()
+            logger.info("Auto-migration: brand_title column added to SQLite")
+        else:
+            logger.debug("Auto-migration: brand_title column already exists in SQLite")
+    except Exception as e:
+        logger.warning(f"SQLite auto-migration failed: {e}")
+    
     return conn, 'sqlite'
 
 
