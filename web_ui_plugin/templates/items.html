@@ -218,7 +218,7 @@
             setActiveView('list');
         });
         
-        // Автообновление страницы items каждые 45 секунд
+        // Автообновление страницы items каждые 10 секунд
         setInterval(function() {
             // Обновляем только если пользователь активен на странице
             if (document.visibilityState === 'visible') {
@@ -226,16 +226,7 @@
                 const currentUrl = window.location.href;
                 window.location.href = currentUrl;
             }
-        }, 45000); // 45 секунд
-        
-        // Добавляем индикатор автообновления
-        const header = document.querySelector('h1.h2');
-        if (header) {
-            const indicator = document.createElement('small');
-            indicator.className = 'text-muted ms-2';
-            indicator.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Auto-refresh: 45s';
-            header.appendChild(indicator);
-        }
+        }, 10000); // 10 секунд
     });
 </script>
 {% endblock %}

@@ -454,24 +454,12 @@
 </div>
 
 <script>
-// Автообновление дашборда каждые 30 секунд
+// Автообновление дашборда каждые 10 секунд
 setInterval(function() {
     // Обновляем только если пользователь активен на странице
     if (document.visibilityState === 'visible') {
         location.reload();
     }
-}, 30000); // 30 секунд
-
-// Показываем индикатор автообновления
-document.addEventListener('DOMContentLoaded', function() {
-    // Добавляем индикатор в заголовок
-    const header = document.querySelector('h1.h2');
-    if (header) {
-        const indicator = document.createElement('small');
-        indicator.className = 'text-muted ms-2';
-        indicator.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Auto-refresh: 30s';
-        header.appendChild(indicator);
-    }
-});
+}, 10000); // 10 секунд
 </script>
 {% endblock %}
