@@ -312,7 +312,8 @@ def index():
                 'timestamp': timestamp_str,
                 'query': str(item[5]) if item[5] else 'Unknown query',
                 'photo_url': str(item[6]) if item[6] else '',
-                'brand_title': str(item[7]) if len(item) > 7 and item[7] else ''
+                'brand_title': str(item[7]) if len(item) > 7 and item[7] else '',
+                'url': f'https://www.vinted.de/items/{item[0]}' if item[0] else '#'
             })
         except Exception as e:
             # Log the error and skip this item
