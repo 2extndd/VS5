@@ -12,7 +12,7 @@ when items matching your search criteria are posted.
 - **Real-Time Notifications**: Get instant alerts for new listings
 - **Multiple Search Queries**: Monitor multiple search terms simultaneously
 - **Country Filtering**: Filter items by seller's country of origin
-- **RSS Feed**: Subscribe to your search results with any RSS reader
+ - **Real-Time Web UI + Telegram**: Instant alerts and full control in the browser
 - **Telegram Integration**: Receive notifications directly in Telegram
 
 ## 📦 Installation
@@ -67,7 +67,7 @@ Features available in the Web UI:
 - **Queries Management**: Add, remove, and view search queries
 - **Items Viewing**: Browse and filter items found by the application
 - **Allowlist Management**: Filter items by seller's country
-- **Configuration**: Set up Telegram bot, RSS feed, and other settings
+ - **Configuration**: Set up Telegram bot and application settings
 - **Logs**: View application logs directly from the web interface
 
 ### Telegram Commands
@@ -93,10 +93,7 @@ Queries must be added with a whole link. It works with filters.:
    /add_query https://www.vinted.fr/catalog?search_text=nike%20shoes&price_to=50&currency=EUR&brand_id[]=53
    ```
 
-### RSS Feed
-
-The RSS feed provides an alternative way to receive notifications. After enabling it in the Web UI, access it
-at [http://localhost:8001](http://localhost:8001).
+ 
 
 ## ⚙️ Advanced Configuration
 

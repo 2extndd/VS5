@@ -752,22 +752,7 @@ def update_config():
         return redirect(url_for('config'))
 
 
-@app.route('/test_config', methods=['GET', 'POST'])
-def test_config():
-    """Test endpoint for configuration debugging"""
-    if request.method == 'GET':
-        return jsonify({
-            'status': 'ok',
-            'message': 'Config endpoint is accessible',
-            'method': 'GET'
-        })
-    else:
-        return jsonify({
-            'status': 'ok',
-            'message': 'Config endpoint received POST request',
-            'form_data': dict(request.form),
-            'method': 'POST'
-        })
+# Removed temporary test endpoint '/test_config'
 
 
 @app.route('/control/<process_name>/<action>', methods=['POST'])
@@ -1647,68 +1632,9 @@ def test_proxies():
     return jsonify(results)
 
 
-@app.route('/debug_last_timestamp')
-def debug_last_timestamp():
-    """Debug get_last_timestamp for all queries"""
-    try:
-        queries = db.get_queries()
-        debug_info = []
-        
-        for query in queries[:5]:  # First 5 queries
-            query_id = query[0]
-            query_name = query[3] if len(query) > 3 and query[3] else f"Query {query_id}"
-            
-            # Test get_last_timestamp
-            try:
-                last_timestamp = db.get_last_timestamp(query_id)
-                debug_info.append({
-                    'query_id': query_id,
-                    'query_name': query_name,
-                    'last_timestamp': last_timestamp,
-                    'timestamp_type': type(last_timestamp).__name__,
-                    'is_none': last_timestamp is None,
-                    'formatted': datetime.fromtimestamp(float(last_timestamp)).strftime('%Y-%m-%d %H:%M:%S') if last_timestamp else 'None'
-                })
-            except Exception as e:
-                debug_info.append({
-                    'query_id': query_id,
-                    'query_name': query_name,
-                    'error': str(e),
-                    'last_timestamp': None
-                })
-        
-        # Also check direct PostgreSQL query
-        try:
-            conn, db_type = db.get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, query_name, last_item FROM queries LIMIT 5")
-            raw_data = cursor.fetchall()
-            conn.close()
-            
-            raw_info = []
-            for row in raw_data:
-                raw_info.append({
-                    'id': row[0],
-                    'name': row[1],
-                    'last_item': row[2],
-                    'last_item_type': type(row[2]).__name__
-                })
-                
-        except Exception as e:
-            raw_info = [{'error': str(e)}]
-        
-        return jsonify({
-            'status': 'success',
-            'debug_info': debug_info,
-            'raw_postgresql_data': raw_info,
-            'db_type': db.get_db_connection()[1]
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Debug error: {e}'
-        })
+"""
+Removed legacy debug endpoint '/debug_last_timestamp'.
+"""
 
 
 @app.route('/redeploy_status')
