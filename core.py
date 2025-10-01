@@ -2,12 +2,9 @@ import db, configuration_values, requests
 from pyVintedVN import Vinted, requester
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from logger import get_logger
-from performance_profiler import get_profiler
-import time
 
 # Get logger for this module
 logger = get_logger(__name__)
-profiler = get_profiler()
 
 
 def process_query(query, name=None, thread_id=None):
@@ -208,22 +205,13 @@ def process_items(queue):
         None
     """
     try:
-        # Start total cycle timer
-        cycle_start = time.time()
-        profiler.start_timer("total_cycle_time")
-        
         logger.info(f"[DEBUG] process_items called - starting execution")
-        logger.info(f"[PERF] 🚀 Starting new scraping cycle at {time.time()}")
         
         # Get database statistics for debugging
-        profiler.start_timer("db_get_stats")
         db_stats = db.get_database_stats()
-        profiler.end_timer("db_get_stats")
         logger.info(f"[DEBUG] Database statistics: {db_stats}")
         
-        profiler.start_timer("db_get_queries")
         all_queries = db.get_queries()
-        profiler.end_timer("db_get_queries")
         logger.info(f"[DEBUG] Got {len(all_queries)} queries from database")
 
         # Initialize Vinted
@@ -240,16 +228,10 @@ def process_items(queue):
 
         # for each keyword we parse data
         for query in all_queries:
-            profiler.start_timer(f"query_{query[0]}_total")
             logger.info(f"[DEBUG] Calling vinted.items.search for query: {query[1]}")
             logger.info(f"[DEBUG] vinted.items type: {type(vinted.items)}")
             logger.info(f"[DEBUG] vinted.items.search method: {vinted.items.search}")
-            
-            # Measure API call time
-            profiler.start_timer(f"query_{query[0]}_api_call")
             all_items = vinted.items.search(query[1], nbr_items=items_per_query)
-            api_time = profiler.end_timer(f"query_{query[0]}_api_call")
-            profiler.add_to_stats('api_request_to_response', api_time)
             
             # Debug: log info about found items
             logger.info(f"[DEBUG] *** CORE.PY *** Found {len(all_items)} total items for query")
@@ -273,29 +255,10 @@ def process_items(queue):
             logger.info(f"[DEBUG] Successfully put items into queue (queue id: {id(queue)})")
             logger.info(f"Scraped {len(data)} items for query: {query[1]}")
             
-            # End query timer
-            profiler.end_timer(f"query_{query[0]}_total")
-        
-        # End total cycle timer and show summary
-        total_cycle_time = profiler.end_timer("total_cycle_time")
-        logger.info(f"[PERF] 🏁 Cycle completed in {total_cycle_time:.3f}s")
-        
-        # Log performance summary
-        profiler.log_summary()
-        
-        # Reset current metrics for next cycle
-        profiler.reset_current()
-            
     except Exception as e:
         logger.error(f"[CRITICAL ERROR] process_items failed: {e}")
         import traceback
         logger.error(f"[CRITICAL ERROR] Traceback: {traceback.format_exc()}")
-        
-        # Log performance even on error
-        try:
-            profiler.log_summary()
-        except:
-            pass
 
 
 def clear_item_queue(items_queue, new_items_queue):
@@ -313,18 +276,12 @@ def clear_item_queue(items_queue, new_items_queue):
             logger.info(f"[DEBUG] Processing item {item.id}: {item.title[:50]}...")
 
             # Check if item already exists in database
-            profiler.start_timer(f"item_{item.id}_db_check")
-            is_duplicate = db.is_item_in_db_by_id(item.id)
-            db_check_time = profiler.end_timer(f"item_{item.id}_db_check")
-            profiler.add_to_stats('db_check_time', db_check_time)
-            
-            if is_duplicate:
+            if db.is_item_in_db_by_id(item.id):
                 logger.info(f"[DEBUG] Item {item.id} already exists in database, skipping...")
                 continue
                 
             # TEMPORARILY DISABLE TIME FILTER - accept all items but check for duplicates
             if True:  # Accept all items for now
-                profiler.start_timer(f"item_{item.id}_processing")
                 logger.info(f"[DEBUG] Creating message for item {item.id}...")
                 try:
                     # We create the message with conditional size display
@@ -357,24 +314,12 @@ def clear_item_queue(items_queue, new_items_queue):
                     
                     # Add the item to the db
                     logger.info(f"[DEBUG] Adding item to database: {item.id}")
+                    import time
                     found_at = time.time()  # Record when bot found this item
-                    
-                    # Calculate and log item discovery latency
-                    item_latency = profiler.calculate_item_latency(item.raw_timestamp, found_at)
-                    profiler.add_to_stats('total_latency', item_latency)
-                    
-                    profiler.start_timer(f"item_{item.id}_db_insert")
                     db.add_item_to_db(id=item.id, title=item.title, query_id=query_id, price=item.price, 
                                       timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency, 
                                       brand_title=item.brand_title, found_at=found_at)
-                    db_insert_time = profiler.end_timer(f"item_{item.id}_db_insert")
-                    profiler.add_to_stats('db_insert_time', db_insert_time)
-                    
                     logger.info(f"[DEBUG] Item {item.id} successfully added to database!")
-                    
-                    # End item processing timer
-                    item_proc_time = profiler.end_timer(f"item_{item.id}_processing")
-                    logger.info(f"[PERF] ⚡ Item {item.id} total processing: {item_proc_time:.3f}s")
                     
                     # Update the query's last_found timestamp
                     logger.info(f"[DEBUG] Updating last_found for query {query_id}")

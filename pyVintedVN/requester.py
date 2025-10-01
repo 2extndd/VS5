@@ -15,15 +15,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = get_logger(__name__)
 
-# Импортируем профилировщик
-try:
-    from performance_profiler import get_profiler
-    profiler = get_profiler()
-    PROFILER_AVAILABLE = True
-except ImportError:
-    PROFILER_AVAILABLE = False
-    logger.info("[REQUESTER] Performance profiler not available")
-
 # Импортируем систему автоматического редеплоя
 try:
     from railway_redeploy import report_403_error, report_401_error, report_429_error, report_success
@@ -137,18 +128,10 @@ class requester:
         if not self.use_proxy:
             return False
         
-        if PROFILER_AVAILABLE:
-            profiler.start_timer("proxy_selection")
-        
         try:
             import proxies
             # Получаем случайный прокси из пула
             new_proxy = proxies.get_random_proxy()
-            
-            if PROFILER_AVAILABLE:
-                proxy_time = profiler.end_timer("proxy_selection")
-                profiler.add_to_stats('cycle_start_to_api_request', proxy_time)
-            
             if new_proxy:
                 # Очищаем старый прокси
                 self.session.proxies.clear()
@@ -316,16 +299,7 @@ class requester:
                 time.sleep(delay)
             
             try:
-                # Measure HTTP request time
-                if PROFILER_AVAILABLE:
-                    profiler.start_timer("http_request")
-                
                 response = self.session.get(url, params=params, timeout=30, allow_redirects=True)
-                
-                if PROFILER_AVAILABLE:
-                    http_time = profiler.end_timer("http_request")
-                    profiler.add_to_stats('api_request_to_response', http_time)
-                    logger.info(f"[PERF] HTTP request took {http_time:.3f}s ({http_time*1000:.0f}ms)")
                 
                 # Increment API request counter
                 try:

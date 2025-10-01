@@ -5,9 +5,6 @@ from datetime import datetime, timezone, timedelta
 from logger import get_logger
 import configuration_values
 
-# Get logger for this module
-logger = get_logger(__name__)
-
 # Импорт системы автоматического редеплоя
 try:
     from railway_redeploy import get_redeploy_status
@@ -17,15 +14,8 @@ except ImportError:
     def get_redeploy_status():
         return {"error": "Railway redeploy system not available"}
 
-# Импорт профилировщика производительности
-try:
-    from performance_profiler import get_profiler
-    profiler = get_profiler()
-    PROFILER_AVAILABLE = True
-except ImportError:
-    PROFILER_AVAILABLE = False
-    profiler = None
-    logger.warning("[WEB_UI] Performance profiler not available")
+# Get logger for this module
+logger = get_logger(__name__)
 
 # Create Flask app
 app = Flask(__name__,
@@ -768,12 +758,6 @@ def config():
     params = db.get_all_parameters()
     countries = db.get_allowlist()
     return render_template('config.html', params=params, countries=countries)
-
-
-@app.route('/performance')
-def performance():
-    """Performance monitoring page"""
-    return render_template('performance.html', profiler_available=PROFILER_AVAILABLE)
 
 
 @app.route('/update_config', methods=['POST'])
@@ -1998,50 +1982,6 @@ def api_logs():
     except Exception as e:
         logger.error(f"Error in api_logs: {e}")
         return jsonify({'error': str(e), 'logs': [], 'total': 0}), 500
-
-
-@app.route('/api/performance')
-def api_performance():
-    """Get performance metrics from profiler"""
-    try:
-        if not PROFILER_AVAILABLE or profiler is None:
-            return jsonify({
-                'available': False,
-                'error': 'Performance profiler not available'
-            })
-        
-        summary = profiler.get_summary()
-        
-        # Format statistics for display
-        formatted_stats = {}
-        for category, stats in summary.get('statistics', {}).items():
-            formatted_stats[category] = {
-                'min_ms': round(stats['min'] * 1000, 2),
-                'avg_ms': round(stats['avg'] * 1000, 2),
-                'max_ms': round(stats['max'] * 1000, 2),
-                'count': stats['count'],
-                'total_s': round(stats['total'], 2)
-            }
-        
-        # Get current metrics
-        current_metrics = {}
-        for name, value in summary.get('current_metrics', {}).items():
-            current_metrics[name] = {
-                'seconds': round(value, 3),
-                'milliseconds': round(value * 1000, 2)
-            }
-        
-        return jsonify({
-            'available': True,
-            'statistics': formatted_stats,
-            'current_metrics': current_metrics,
-            'timestamp': datetime.now(timezone(timedelta(hours=3))).strftime('%Y-%m-%d %H:%M:%S')
-        })
-    except Exception as e:
-        logger.error(f"Error in api_performance: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'available': False, 'error': str(e)}), 500
 
 
 def web_ui_process():
