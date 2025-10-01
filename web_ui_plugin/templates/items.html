@@ -85,7 +85,7 @@
                 <!-- Card View -->
                 <div class="row" id="cardView">
                     {% for item in items %}
-                    <div class="col-md-4 col-lg-3 mb-4">
+                    <div class="col-md-3 col-lg-2 col-xl-2 mb-4">
                         <div class="card h-100">
                             {% if item.photo_url %}
                             <a href="{{ item.url }}" target="_blank" class="text-decoration-none">
@@ -223,15 +223,80 @@
             setActiveView('list');
         });
         
-        // Автообновление страницы items каждые 10 секунд
-        setInterval(function() {
-            // Обновляем только если пользователь активен на странице
-            if (document.visibilityState === 'visible') {
-                // Сохраняем текущие фильтры
-                const currentUrl = window.location.href;
-                window.location.href = currentUrl;
-            }
-        }, 10000); // 10 секунд
+        // AJAX автообновление items каждые 10 секунд без перезагрузки страницы
+        function refreshItems() {
+            if (document.visibilityState !== 'visible') return;
+            
+            // Получаем текущие параметры фильтра из URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const query = urlParams.get('query') || '';
+            const limit = urlParams.get('limit') || '50';
+            
+            // Запрашиваем обновленные данные
+            fetch(`/api/items_list?query=${encodeURIComponent(query)}&limit=${limit}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.items && data.items.length > 0) {
+                        const cardView = document.getElementById('cardView');
+                        const listView = document.querySelector('#listView tbody');
+                        
+                        // Обновляем Card View
+                        let cardHTML = '';
+                        data.items.forEach(item => {
+                            const photoHTML = item.photo_url ?
+                                `<a href="${item.url}" target="_blank" class="text-decoration-none"><img src="${item.photo_url}" class="card-img-top" alt="${item.title}" style="aspect-ratio: 4/5; object-fit: cover;"></a>` :
+                                `<a href="${item.url}" target="_blank" class="text-decoration-none"><div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="aspect-ratio: 4/5;"><i class="bi bi-image text-muted" style="font-size: 2rem;"></i></div></a>`;
+                            
+                            cardHTML += `
+                                <div class="col-md-3 col-lg-2 col-xl-2 mb-4">
+                                    <div class="card h-100">
+                                        ${photoHTML}
+                                        <div class="card-body p-3">
+                                            <h6 class="card-title mb-2">${item.title}</h6>
+                                            <p class="card-text mb-1">
+                                                <span class="fw-bold text-dark" style="font-size: 1.1rem;">${item.price} ${item.currency}</span>
+                                                ${item.brand_title ? `<br><small class="text-muted">${item.brand_title}</small>` : ''}
+                                            </p>
+                                            <p class="card-text small text-muted mb-0">
+                                                <i class="bi bi-clock me-1"></i> 
+                                                <span class="badge bg-info">${item.timestamp}</span>
+                                            </p>
+                                        </div>
+                                        <div class="card-footer bg-white p-3">
+                                            <a href="${item.url}" target="_blank" class="btn btn-primary w-100">View</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        cardView.innerHTML = cardHTML;
+                        
+                        // Обновляем List View
+                        let listHTML = '';
+                        data.items.forEach(item => {
+                            const photoHTML = item.photo_url ?
+                                `<img src="${item.photo_url}" alt="${item.title}" class="img-thumbnail" style="width: 50px; height: 50px; object-fit: cover;">` :
+                                `<div class="bg-light d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;"><i class="bi bi-image text-muted"></i></div>`;
+                            
+                            listHTML += `
+                                <tr>
+                                    <td style="width: 60px;">${photoHTML}</td>
+                                    <td>${item.title}</td>
+                                    <td>${item.price} ${item.currency}${item.brand_title ? `<br><small class="text-muted">${item.brand_title}</small>` : ''}</td>
+                                    <td>${item.query}</td>
+                                    <td><span class="badge bg-success">${item.timestamp}</span></td>
+                                    <td><a href="${item.url}" target="_blank" class="btn btn-sm btn-primary">View</a></td>
+                                </tr>
+                            `;
+                        });
+                        listView.innerHTML = listHTML;
+                    }
+                })
+                .catch(error => console.error('Error refreshing items:', error));
+        }
+        
+        // Запускаем автообновление каждые 10 секунд
+        setInterval(refreshItems, 10000);
     });
 </script>
 {% endblock %}

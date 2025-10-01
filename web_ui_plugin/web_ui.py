@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 import db, core, os, re
 from urllib.parse import urlparse, parse_qs
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from logger import get_logger
 import configuration_values
 
@@ -24,6 +24,21 @@ app = Flask(__name__,
 
 # Secret key for session management
 app.secret_key = os.urandom(24)
+
+# Helper function for GMT+3 timezone (Minsk time)
+def format_timestamp_gmt3(timestamp_val):
+    """Format timestamp to GMT+3 (Minsk time)"""
+    try:
+        if timestamp_val:
+            # Create timezone object for GMT+3
+            gmt3 = timezone(timedelta(hours=3))
+            # Convert unix timestamp to datetime in GMT+3
+            dt = datetime.fromtimestamp(float(timestamp_val), tz=gmt3)
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            return 'Unknown'
+    except (ValueError, TypeError, OSError):
+        return 'Invalid timestamp'
 
 
 @app.context_processor
@@ -294,15 +309,8 @@ def index():
     formatted_items = []
     for item in items:
         try:
-            # Safe timestamp conversion
-            try:
-                if item[4]:
-                    timestamp_val = float(item[4])  # Convert Decimal to float
-                    timestamp_str = datetime.fromtimestamp(timestamp_val).strftime('%Y-%m-%d %H:%M:%S')
-                else:
-                    timestamp_str = 'Unknown'
-            except (ValueError, TypeError, OSError):
-                timestamp_str = 'Invalid timestamp'
+            # Safe timestamp conversion with GMT+3
+            timestamp_str = format_timestamp_gmt3(item[4])
             
             formatted_items.append({
                 'id': str(item[0]) if item[0] else 'Unknown',
@@ -336,15 +344,8 @@ def index():
     last_item = db.get_last_found_item()
     if last_item:
         try:
-            # Safe timestamp conversion for last item
-            try:
-                if last_item[4]:
-                    timestamp_val = float(last_item[4])  # Convert Decimal to float
-                    last_timestamp_str = datetime.fromtimestamp(timestamp_val).strftime('%Y-%m-%d %H:%M:%S')
-                else:
-                    last_timestamp_str = 'Unknown'
-            except (ValueError, TypeError, OSError):
-                last_timestamp_str = 'Invalid timestamp'
+            # Safe timestamp conversion for last item with GMT+3
+            last_timestamp_str = format_timestamp_gmt3(last_item[4])
                 
             stats['last_item'] = {
                 'id': str(last_item[0]) if last_item[0] else 'Unknown',
@@ -383,9 +384,8 @@ def queries():
         try:
             last_timestamp = db.get_last_timestamp(query[0])
             if last_timestamp:
-                # Convert Decimal to float for PostgreSQL compatibility
-                timestamp_float = float(last_timestamp)
-                last_found_item = datetime.fromtimestamp(timestamp_float).strftime('%Y-%m-%d %H:%M:%S')
+                # Format with GMT+3
+                last_found_item = format_timestamp_gmt3(last_timestamp)
             else:
                 last_found_item = "Never"
         except Exception as e:
@@ -623,15 +623,8 @@ def items():
 
     for item in items_data:
         try:
-            # Safe timestamp conversion
-            try:
-                if item[4]:
-                    timestamp_val = float(item[4])  # Convert Decimal to float
-                    timestamp_str = datetime.fromtimestamp(timestamp_val).strftime('%Y-%m-%d %H:%M:%S')
-                else:
-                    timestamp_str = 'Unknown'
-            except (ValueError, TypeError, OSError):
-                timestamp_str = 'Invalid timestamp'
+            # Safe timestamp conversion with GMT+3
+            timestamp_str = format_timestamp_gmt3(item[4])
             
             # Safe query parsing
             try:
@@ -1692,6 +1685,190 @@ def force_redeploy():
         logger.error(f"[FORCE_REDEPLOY] Error during force redeploy: {e}")
         flash(f'Ошибка при редеплое: {str(e)}', 'error')
         return jsonify({"error": str(e)}), 500
+
+# ============================================
+# API ENDPOINTS FOR AJAX AUTO-REFRESH
+# ============================================
+
+@app.route('/api/dashboard_stats')
+def api_dashboard_stats():
+    """API endpoint for dashboard statistics - used for AJAX refresh"""
+    try:
+        stats = {
+            'total_items': db.get_total_items_count(),
+            'total_queries': db.get_total_queries_count(),
+            'api_requests': db.get_api_requests_count(),
+            'bot_uptime': db.get_bot_uptime()
+        }
+        
+        # Get the last found item
+        last_item = db.get_last_found_item()
+        if last_item:
+            try:
+                last_timestamp_str = format_timestamp_gmt3(last_item[4])
+                stats['last_item'] = {
+                    'id': str(last_item[0]) if last_item[0] else 'Unknown',
+                    'title': str(last_item[1]) if last_item[1] else 'Unknown title',
+                    'price': float(last_item[2]) if last_item[2] is not None else 0.0,
+                    'currency': str(last_item[3]) if last_item[3] else 'EUR',
+                    'timestamp': last_timestamp_str,
+                    'query': str(last_item[5]) if last_item[5] else 'Unknown query',
+                    'photo_url': str(last_item[6]) if last_item[6] else ''
+                }
+            except Exception as e:
+                logger.error(f"Error formatting last item: {e}")
+                stats['last_item'] = None
+        else:
+            stats['last_item'] = None
+        
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error in api_dashboard_stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recent_items')
+def api_recent_items():
+    """API endpoint for recent items - used for AJAX refresh"""
+    try:
+        items = db.get_items(limit=42)
+        formatted_items = []
+        
+        for item in items:
+            try:
+                timestamp_str = format_timestamp_gmt3(item[4])
+                
+                formatted_items.append({
+                    'id': str(item[0]) if item[0] else 'Unknown',
+                    'title': str(item[1]) if item[1] else 'Unknown title',
+                    'price': float(item[2]) if item[2] is not None else 0.0,
+                    'currency': str(item[3]) if item[3] else 'EUR',
+                    'timestamp': timestamp_str,
+                    'query': str(item[5]) if item[5] else 'Unknown query',
+                    'photo_url': str(item[6]) if item[6] else '',
+                    'brand_title': str(item[7]) if len(item) > 7 and item[7] else '',
+                    'url': f'https://www.vinted.de/items/{item[0]}' if item[0] else '#'
+                })
+            except Exception as e:
+                logger.error(f"Error formatting item {item}: {e}")
+                continue
+        
+        return jsonify({'items': formatted_items})
+    except Exception as e:
+        logger.error(f"Error in api_recent_items: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/items_list')
+def api_items_list():
+    """API endpoint for items list page - used for AJAX refresh"""
+    try:
+        query_string = request.args.get('query', '')
+        limit = int(request.args.get('limit', 50))
+        
+        items_limit = None if limit == 0 else limit
+        items_data = db.get_items(limit=items_limit, query=query_string)
+        formatted_items = []
+        
+        for item in items_data:
+            try:
+                timestamp_str = format_timestamp_gmt3(item[4])
+                
+                # Safe query parsing
+                try:
+                    if item[5]:
+                        parsed_query = urlparse(item[5])
+                        query_params = parse_qs(parsed_query.query)
+                        query_name = query_params.get('search_text', [None])[0]
+                        query_display = query_name if query_name else item[5][:50]
+                    else:
+                        query_display = 'Unknown query'
+                except:
+                    query_display = 'Unknown query'
+                
+                formatted_items.append({
+                    'id': str(item[0]) if item[0] else 'Unknown',
+                    'title': str(item[1]) if item[1] else 'Unknown title',
+                    'price': float(item[2]) if item[2] is not None else 0.0,
+                    'currency': str(item[3]) if item[3] else 'EUR',
+                    'timestamp': timestamp_str,
+                    'query': query_display,
+                    'photo_url': str(item[6]) if item[6] else '',
+                    'brand_title': str(item[7]) if len(item) > 7 and item[7] else '',
+                    'url': f'https://www.vinted.de/items/{item[0]}' if item[0] else '#'
+                })
+            except Exception as e:
+                logger.error(f"Error formatting item: {e}")
+                continue
+        
+        return jsonify({'items': formatted_items})
+    except Exception as e:
+        logger.error(f"Error in api_items_list: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/logs')
+def api_logs():
+    """API endpoint for logs - used for AJAX refresh with structured parsing"""
+    try:
+        offset = int(request.args.get('offset', 0))
+        limit = int(request.args.get('limit', 100))
+        level_filter = request.args.get('level', 'all')
+        
+        log_file = 'logs/vinted.log'
+        if not os.path.exists(log_file):
+            return jsonify({'logs': [], 'total': 0})
+        
+        # Read log file and parse entries
+        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            all_lines = f.readlines()
+        
+        # Parse log entries (format: timestamp - module - level - message)
+        parsed_logs = []
+        import re
+        
+        # GMT+3 timezone for log timestamps
+        gmt3 = timezone(timedelta(hours=3))
+        
+        for line in all_lines:
+            # Try to parse log line: YYYY-MM-DD HH:MM:SS - module - LEVEL - message
+            match = re.match(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - ([^ ]+) - (\w+) - (.+)$', line.strip())
+            if match:
+                timestamp_str, module, level, message = match.groups()
+                
+                # Convert timestamp to GMT+3 if needed (log timestamps are in UTC by default)
+                try:
+                    # Parse the timestamp and convert to GMT+3
+                    from datetime import datetime as dt_parse
+                    log_dt = dt_parse.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
+                    # Assume log is in UTC, convert to GMT+3
+                    log_dt_utc = log_dt.replace(tzinfo=timezone.utc)
+                    log_dt_gmt3 = log_dt_utc.astimezone(gmt3)
+                    timestamp_gmt3 = log_dt_gmt3.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    timestamp_gmt3 = timestamp_str
+                
+                # Filter by log level if needed
+                if level_filter == 'all' or level == level_filter:
+                    parsed_logs.append({
+                        'timestamp': timestamp_gmt3,
+                        'module': module,
+                        'level': level,
+                        'message': message
+                    })
+        
+        # Reverse to show newest first
+        parsed_logs.reverse()
+        
+        # Apply offset and limit
+        total = len(parsed_logs)
+        logs_slice = parsed_logs[offset:offset+limit]
+        
+        return jsonify({'logs': logs_slice, 'total': total})
+    except Exception as e:
+        logger.error(f"Error in api_logs: {e}")
+        return jsonify({'error': str(e), 'logs': [], 'total': 0}), 500
+
 
 def web_ui_process():
     logger.info("Web UI process started")

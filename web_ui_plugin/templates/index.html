@@ -120,7 +120,7 @@
                 <!-- Card View -->
                 <div class="row" id="cardView">
                     {% for item in items %}
-                    <div class="col-md-4 col-lg-3 mb-3">
+                    <div class="col-md-3 col-lg-2 col-xl-2 mb-3">
                         <div class="card h-100">
                             {% if item.photo_url %}
                             <a href="{{ item.url }}" target="_blank" class="text-decoration-none">
@@ -421,12 +421,114 @@
 </div>
 
 <script>
-// Автообновление дашборда каждые 10 секунд
-setInterval(function() {
-    // Обновляем только если пользователь активен на странице
-    if (document.visibilityState === 'visible') {
-        location.reload();
-    }
-}, 10000); // 10 секунд
+// AJAX автообновление дашборда каждые 10 секунд без перезагрузки страницы
+function refreshDashboard() {
+    if (document.visibilityState !== 'visible') return;
+    
+    // Обновляем статистику
+    fetch('/api/dashboard_stats')
+        .then(response => response.json())
+        .then(data => {
+            // Обновляем счетчики
+            document.querySelector('.display-4.fw-bold.text-primary').textContent = data.total_items;
+            document.querySelector('.display-4.fw-bold.text-success').textContent = data.total_queries;
+            document.querySelector('.display-4.fw-bold.text-warning').textContent = data.api_requests;
+            
+            // Обновляем uptime
+            const uptimeElement = document.querySelector('.text-muted.d-block');
+            if (uptimeElement) {
+                uptimeElement.textContent = 'Uptime: ' + data.bot_uptime;
+            }
+            
+            // Обновляем last item если есть
+            if (data.last_item) {
+                const lastItemContainer = document.querySelector('.card-body.text-center .d-flex.align-items-center.justify-content-center');
+                if (lastItemContainer) {
+                    const photoUrl = data.last_item.photo_url || '';
+                    const itemUrl = 'https://www.vinted.de/items/' + data.last_item.id;
+                    
+                    lastItemContainer.innerHTML = `
+                        ${photoUrl ? 
+                            `<img src="${photoUrl}" alt="${data.last_item.title}" class="img-thumbnail me-2" style="width: 50px; height: 50px; object-fit: cover;">` :
+                            `<div class="bg-light d-flex align-items-center justify-content-center me-2" style="width: 50px; height: 50px;"><i class="bi bi-image text-muted"></i></div>`
+                        }
+                        <div class="text-start">
+                            <h6 class="mb-0 text-truncate" style="max-width: 150px;">
+                                <a href="${itemUrl}" target="_blank" class="text-decoration-none">${data.last_item.title}</a>
+                            </h6>
+                            <small class="text-muted">${data.last_item.timestamp}</small>
+                            <div class="mt-1">
+                                <a href="${itemUrl}" target="_blank" class="btn btn-sm btn-outline-info">
+                                    <i class="bi bi-box-arrow-up-right"></i> View
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        })
+        .catch(error => console.error('Error refreshing stats:', error));
+    
+    // Обновляем список вещей
+    fetch('/api/recent_items')
+        .then(response => response.json())
+        .then(data => {
+            const cardView = document.getElementById('cardView');
+            const listView = document.querySelector('#listView tbody');
+            
+            if (data.items && data.items.length > 0) {
+                // Обновляем Card View
+                let cardHTML = '';
+                data.items.forEach(item => {
+                    const photoHTML = item.photo_url ?
+                        `<a href="${item.url}" target="_blank" class="text-decoration-none"><img src="${item.photo_url}" class="card-img-top" alt="${item.title}" style="width: 100%; aspect-ratio: 4/5; object-fit: cover;"></a>` :
+                        `<a href="${item.url}" target="_blank" class="text-decoration-none"><div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="width: 100%; aspect-ratio: 4/5;"><i class="bi bi-image text-muted" style="font-size: 2rem;"></i></div></a>`;
+                    
+                    cardHTML += `
+                        <div class="col-md-3 col-lg-2 col-xl-2 mb-3">
+                            <div class="card h-100">
+                                ${photoHTML}
+                                <div class="card-body p-2">
+                                    <h6 class="card-title" style="height: 40px; overflow: hidden; font-size: 0.9rem;"><strong>${item.title}</strong></h6>
+                                    <p class="card-text small mb-1">
+                                        Price: ${item.price} ${item.currency}<br>
+                                        ${item.brand_title ? `<small class="text-muted">${item.brand_title}</small><br>` : ''}
+                                        Date: ${item.timestamp}
+                                    </p>
+                                </div>
+                                <div class="card-footer bg-white p-2">
+                                    <a href="${item.url}" target="_blank" class="btn btn-sm btn-primary w-100">View</a>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                cardView.innerHTML = cardHTML;
+                
+                // Обновляем List View
+                let listHTML = '';
+                data.items.forEach(item => {
+                    const photoHTML = item.photo_url ?
+                        `<img src="${item.photo_url}" alt="${item.title}" class="img-thumbnail" style="width: 50px; height: 50px; object-fit: cover;">` :
+                        `<div class="bg-light d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;"><i class="bi bi-image text-muted"></i></div>`;
+                    
+                    listHTML += `
+                        <tr>
+                            <td style="width: 60px;">${photoHTML}</td>
+                            <td>${item.title}</td>
+                            <td>${item.price} ${item.currency}${item.brand_title ? `<br><small class="text-muted">${item.brand_title}</small>` : ''}</td>
+                            <td>${item.timestamp}</td>
+                            <td><a href="${item.url}" target="_blank" class="btn btn-sm btn-outline-primary">View</a></td>
+                        </tr>
+                    `;
+                });
+                listView.innerHTML = listHTML;
+            }
+        })
+        .catch(error => console.error('Error refreshing items:', error));
+}
+
+// Запускаем обновление каждые 10 секунд
+setInterval(refreshDashboard, 10000);
 </script>
 {% endblock %}
