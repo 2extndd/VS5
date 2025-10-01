@@ -72,6 +72,7 @@ VALUES ('telegram_enabled', 'False'),
        ('proxy_list_link', ''),
        ('check_proxies', 'False'),
        ('last_proxy_check_time', '0'),
+       ('proxy_rotation_interval', '1'),
        
        ('last_redeploy_time', ''),
        ('redeploy_threshold_minutes', '4'),

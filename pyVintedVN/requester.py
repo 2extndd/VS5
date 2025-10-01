@@ -45,6 +45,19 @@ class requester:
         self.session = requests.Session()
         self.access_token = None
         self.MAX_RETRIES = 5
+        self.use_proxy = with_proxy
+        self.request_count = 0  # Счетчик запросов
+        
+        # Получаем интервал ротации прокси из БД
+        try:
+            import db
+            rotation_interval_str = db.get_parameter("proxy_rotation_interval")
+            self.proxy_rotation_interval = int(rotation_interval_str) if rotation_interval_str else 1
+        except:
+            self.proxy_rotation_interval = 1  # По умолчанию менять прокси каждый запрос
+        
+        if self.debug:
+            logger.info(f"[REQUESTER] Proxy rotation interval: {self.proxy_rotation_interval} request(s)")
         
         # Базовые headers
         self.HEADER = {
@@ -81,26 +94,66 @@ class requester:
         if self.debug:
             logger.info("[DEBUG] Working requester initialized successfully")
     
-    def configure_proxy(self):
+    def configure_proxy(self, force_new=False):
         """Настройка прокси"""
         try:
             import proxies
-            logger.info(f"[REQUESTER] Configuring proxy for new requester session...")
-            proxy_configured = proxies.configure_proxy(self.session)
-            if proxy_configured:
-                # Маскируем чувствительные данные в логах
-                proxy_info = str(self.session.proxies)
-                if '@' in proxy_info:
-                    # Скрываем пароли в логах
-                    import re
-                    proxy_info = re.sub(r'://[^:]+:[^@]+@', '://***:***@', proxy_info)
-                logger.info(f"[REQUESTER] ✅ Proxy configured successfully: {proxy_info}")
-            else:
-                logger.info(f"[REQUESTER] ⚠️  No proxy configured - using direct connection")
+            
+            # Если force_new=True или это первая настройка, получаем новый случайный прокси
+            if force_new or self.request_count == 0:
+                logger.info(f"[REQUESTER] Getting random proxy from pool...")
+                proxy_configured = proxies.configure_proxy(self.session)
+                if proxy_configured:
+                    # Маскируем чувствительные данные в логах
+                    proxy_info = str(self.session.proxies)
+                    if '@' in proxy_info:
+                        # Скрываем пароли в логах
+                        import re
+                        proxy_info = re.sub(r'://[^:]+:[^@]+@', '://***:***@', proxy_info)
+                    if self.debug or force_new:
+                        logger.info(f"[REQUESTER] ✅ Proxy configured: {proxy_info}")
+                    return True
+                else:
+                    if self.debug or force_new:
+                        logger.info(f"[REQUESTER] ⚠️  No proxy available - using direct connection")
+                    return False
         except Exception as e:
             logger.error(f"[REQUESTER] ❌ Proxy configuration failed: {e}")
             import traceback
             logger.error(f"[REQUESTER] Traceback: {traceback.format_exc()}")
+            return False
+    
+    def set_random_proxy(self):
+        """Установить случайный прокси из пула"""
+        if not self.use_proxy:
+            return False
+        
+        try:
+            import proxies
+            # Получаем случайный прокси из пула
+            new_proxy = proxies.get_random_proxy()
+            if new_proxy:
+                # Очищаем старый прокси
+                self.session.proxies.clear()
+                # Конвертируем и устанавливаем новый
+                proxy_dict = proxies.convert_proxy_string_to_dict(new_proxy)
+                self.session.proxies.update(proxy_dict)
+                
+                if self.debug:
+                    # Маскируем чувствительные данные
+                    proxy_info = str(proxy_dict)
+                    if '@' in proxy_info:
+                        import re
+                        proxy_info = re.sub(r'://[^:]+:[^@]+@', '://***:***@', proxy_info)
+                    logger.info(f"[PROXY] Random proxy set: {proxy_info}")
+                return True
+            else:
+                # Нет доступных прокси - используем прямое соединение
+                self.session.proxies.clear()
+                return False
+        except Exception as e:
+            logger.error(f"[PROXY] Error setting random proxy: {e}")
+            return False
     
     def rotate_proxy(self):
         """Переключение на новый прокси при проблемах с текущим"""
@@ -220,8 +273,17 @@ class requester:
     
     def get(self, url, params=None):
         """GET запрос с повторными попытками и обновлением токена"""
+        # Увеличиваем счетчик запросов
+        self.request_count += 1
+        
+        # Устанавливаем случайный прокси перед каждым запросом (если включено)
+        if self.use_proxy and self.request_count % self.proxy_rotation_interval == 0:
+            self.set_random_proxy()
+            if self.debug:
+                logger.info(f"[PROXY] Rotated to random proxy (request #{self.request_count})")
+        
         if self.debug:
-            logger.info(f"[DEBUG] Making GET request to: {url}")
+            logger.info(f"[DEBUG] Making GET request to: {url} (request #{self.request_count})")
             if params:
                 logger.info(f"[DEBUG] Request params: {params}")
         
