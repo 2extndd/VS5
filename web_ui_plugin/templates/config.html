@@ -304,6 +304,11 @@ CREATE INDEX IF NOT EXISTS idx_items_found_at ON items(found_at);
                             <span class="fw-bold ms-2" id="total-error-count">-</span>
                         </div>
                         <div class="mb-2">
+                            <small class="text-muted">Success Streak:</small>
+                            <span class="fw-bold ms-2 text-success" id="success-streak">-</span>
+                            <small class="text-muted">(need <span id="success-threshold">10</span> to reset errors)</small>
+                        </div>
+                        <div class="mb-2">
                             <small class="text-muted">First Error:</small>
                             <span class="fw-bold ms-2" id="first-error-time">-</span>
                         </div>
@@ -657,6 +662,10 @@ CREATE INDEX IF NOT EXISTS idx_items_found_at ON items(found_at);
         document.getElementById('error-401-count').textContent = data.error_401_count || '0';
         document.getElementById('error-429-count').textContent = data.error_429_count || '0';
         document.getElementById('total-error-count').textContent = data.total_errors || '0';
+        
+        // Update success streak
+        document.getElementById('success-streak').textContent = data.success_streak || '0';
+        document.getElementById('success-threshold').textContent = data.success_threshold || '10';
         
         // Find the earliest and latest error times from all error types
         const errorTimes = [
