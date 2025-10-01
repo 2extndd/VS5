@@ -56,7 +56,7 @@ VALUES ('telegram_enabled', 'False'),
 
        -- RSS parameters removed
 
-       ('version', '1.2'),
+       ('version', '1.3'),
        ('github_url', 'https://github.com/Fuyucch1/Vinted-Notifications'),
 
        ('items_per_query', '20'),
