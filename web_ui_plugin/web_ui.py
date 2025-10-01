@@ -1816,6 +1816,36 @@ def api_items_list():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/debug_items')
+def api_debug_items():
+    """Debug endpoint to check database"""
+    try:
+        import db as db_module
+        conn, db_type = db_module.get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check total items
+        cursor.execute("SELECT COUNT(*) FROM items")
+        total = cursor.fetchone()[0]
+        
+        # Try simple query
+        if db_type == 'postgresql':
+            cursor.execute("SELECT item, title FROM items LIMIT 5")
+        else:
+            cursor.execute("SELECT item, title FROM items LIMIT 5")
+        items = cursor.fetchall()
+        
+        conn.close()
+        
+        return jsonify({
+            'db_type': db_type,
+            'total_items': total,
+            'sample_items': [{'id': str(i[0]), 'title': str(i[1])} for i in items],
+            'get_items_result': len(db_module.get_items(limit=5))
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/logs')
 def api_logs():
     """API endpoint for logs - used for AJAX refresh with structured parsing"""
