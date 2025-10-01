@@ -1839,8 +1839,7 @@ def api_logs():
                 # Convert timestamp to GMT+3 if needed (log timestamps are in UTC by default)
                 try:
                     # Parse the timestamp and convert to GMT+3
-                    from datetime import datetime as dt_parse
-                    log_dt = dt_parse.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
+                    log_dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
                     # Assume log is in UTC, convert to GMT+3
                     log_dt_utc = log_dt.replace(tzinfo=timezone.utc)
                     log_dt_gmt3 = log_dt_utc.astimezone(gmt3)
