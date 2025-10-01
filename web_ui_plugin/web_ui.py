@@ -40,6 +40,35 @@ def format_timestamp_gmt3(timestamp_val):
     except (ValueError, TypeError, OSError):
         return 'Invalid timestamp'
 
+def calculate_delay(published_timestamp, found_timestamp):
+    """Calculate delay between item publication and bot discovery"""
+    try:
+        if not published_timestamp or not found_timestamp:
+            return None
+        
+        published = float(published_timestamp)
+        found = float(found_timestamp)
+        delay_seconds = found - published
+        
+        # Don't show negative delays (clock skew issues)
+        if delay_seconds < 0:
+            return None
+        
+        # Format delay as human-readable text
+        if delay_seconds < 60:
+            return f"+{int(delay_seconds)} сек"
+        elif delay_seconds < 3600:
+            minutes = int(delay_seconds / 60)
+            return f"+{minutes} мин"
+        elif delay_seconds < 86400:
+            hours = int(delay_seconds / 3600)
+            return f"+{hours} час" if hours == 1 else f"+{hours} часа" if hours < 5 else f"+{hours} часов"
+        else:
+            days = int(delay_seconds / 86400)
+            return f"+{days} день" if days == 1 else f"+{days} дня" if days < 5 else f"+{days} дней"
+    except (ValueError, TypeError, OSError):
+        return None
+
 
 @app.context_processor
 def inject_version_info():
@@ -312,12 +341,18 @@ def index():
             # Safe timestamp conversion with GMT+3
             timestamp_str = format_timestamp_gmt3(item[4])
             
+            # Calculate delay between publication and bot discovery
+            delay_str = None
+            if len(item) > 8 and item[8]:  # item[8] is found_at
+                delay_str = calculate_delay(item[4], item[8])
+            
             formatted_items.append({
                 'id': str(item[0]) if item[0] else 'Unknown',
                 'title': str(item[1]) if item[1] else 'Unknown title',
                 'price': float(item[2]) if item[2] is not None else 0.0,
                 'currency': str(item[3]) if item[3] else 'EUR',
                 'timestamp': timestamp_str,
+                'delay': delay_str,
                 'query': str(item[5]) if item[5] else 'Unknown query',
                 'photo_url': str(item[6]) if item[6] else '',
                 'brand_title': str(item[7]) if len(item) > 7 and item[7] else '',
@@ -632,6 +667,11 @@ def items():
             # Safe timestamp conversion with GMT+3
             timestamp_str = format_timestamp_gmt3(item[4])
             
+            # Calculate delay between publication and bot discovery
+            delay_str = None
+            if len(item) > 8 and item[8]:  # item[8] is found_at
+                delay_str = calculate_delay(item[4], item[8])
+            
             # Safe query parsing
             try:
                 if item[5]:
@@ -661,6 +701,7 @@ def items():
                 'price': float(item[2]) if item[2] is not None else 0.0,
                 'currency': str(item[3]) if item[3] else 'EUR',
                 'timestamp': timestamp_str,
+                'delay': delay_str,
                 'query': query_display,
                 'url': f'https://www.vinted.de/items/{item[0]}',
                 'photo_url': str(item[6]) if item[6] else '',
@@ -1682,12 +1723,18 @@ def api_recent_items():
             try:
                 timestamp_str = format_timestamp_gmt3(item[4])
                 
+                # Calculate delay
+                delay_str = None
+                if len(item) > 8 and item[8]:
+                    delay_str = calculate_delay(item[4], item[8])
+                
                 formatted_items.append({
                     'id': str(item[0]) if item[0] else 'Unknown',
                     'title': str(item[1]) if item[1] else 'Unknown title',
                     'price': float(item[2]) if item[2] is not None else 0.0,
                     'currency': str(item[3]) if item[3] else 'EUR',
                     'timestamp': timestamp_str,
+                    'delay': delay_str,
                     'query': str(item[5]) if item[5] else 'Unknown query',
                     'photo_url': str(item[6]) if item[6] else '',
                     'brand_title': str(item[7]) if len(item) > 7 and item[7] else '',
@@ -1718,6 +1765,11 @@ def api_items_list():
             try:
                 timestamp_str = format_timestamp_gmt3(item[4])
                 
+                # Calculate delay
+                delay_str = None
+                if len(item) > 8 and item[8]:
+                    delay_str = calculate_delay(item[4], item[8])
+                
                 # Safe query parsing
                 try:
                     if item[5]:
@@ -1736,6 +1788,7 @@ def api_items_list():
                     'price': float(item[2]) if item[2] is not None else 0.0,
                     'currency': str(item[3]) if item[3] else 'EUR',
                     'timestamp': timestamp_str,
+                    'delay': delay_str,
                     'query': query_display,
                     'photo_url': str(item[6]) if item[6] else '',
                     'brand_title': str(item[7]) if len(item) > 7 and item[7] else '',

@@ -141,7 +141,7 @@
                                 <p class="card-text small mb-1">
                                     Price: {{ item.price }} {{ item.currency }}<br>
                                     {% if item.brand_title %}<small class="text-muted">{{ item.brand_title }}</small><br>{% endif %}
-                                    Date: {{ item.timestamp }}
+                                    Date: {{ item.timestamp }}{% if item.delay %} <span class="badge bg-info">{{ item.delay }}</span>{% endif %}
                                 </p>
                             </div>
                             <div class="card-footer bg-white p-2">
@@ -493,7 +493,7 @@ function refreshDashboard() {
                                     <p class="card-text small mb-1">
                                         Price: ${item.price} ${item.currency}<br>
                                         ${item.brand_title ? `<small class="text-muted">${item.brand_title}</small><br>` : ''}
-                                        Date: ${item.timestamp}
+                                        Date: ${item.timestamp}${item.delay ? ` <span class="badge bg-info">${item.delay}</span>` : ''}
                                     </p>
                                 </div>
                                 <div class="card-footer bg-white p-2">

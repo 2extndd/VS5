@@ -102,6 +102,7 @@
                                 <p class="card-text small text-muted mb-0">
                                     <i class="bi bi-clock me-1"></i> 
                                     <span class="badge bg-info">{{ item.timestamp }}</span>
+                                    {% if item.delay %}<span class="badge bg-warning text-dark ms-1">{{ item.delay }}</span>{% endif %}
                                 </p>
                             </div>
                             <div class="card-footer bg-white p-3">
@@ -155,7 +156,10 @@
                                 {% endif %}
                             </td>
                             <td>{{ item.query|truncate(30) }}</td>
-                            <td><span class="badge bg-success">{{ item.timestamp }}</span></td>
+                            <td>
+                                <span class="badge bg-success">{{ item.timestamp }}</span>
+                                {% if item.delay %}<br><span class="badge bg-warning text-dark mt-1">{{ item.delay }}</span>{% endif %}
+                            </td>
                             <td>
                                 <a href="{{ item.url }}" target="_blank" class="btn btn-sm btn-primary">
                                     View
@@ -307,6 +311,7 @@
                                             <p class="card-text small text-muted mb-0">
                                                 <i class="bi bi-clock me-1"></i> 
                                                 <span class="badge bg-info">${item.timestamp}</span>
+                                                ${item.delay ? `<span class="badge bg-warning text-dark ms-1">${item.delay}</span>` : ''}
                                             </p>
                                         </div>
                                         <div class="card-footer bg-white p-3">
@@ -331,7 +336,7 @@
                                     <td>${item.title}</td>
                                     <td>${item.price} ${item.currency}${item.brand_title ? `<br><small class="text-muted">${item.brand_title}</small>` : ''}</td>
                                     <td>${item.query}</td>
-                                    <td><span class="badge bg-success">${item.timestamp}</span></td>
+                                    <td><span class="badge bg-success">${item.timestamp}</span>${item.delay ? `<br><span class="badge bg-warning text-dark mt-1">${item.delay}</span>` : ''}</td>
                                     <td><a href="${item.url}" target="_blank" class="btn btn-sm btn-primary">View</a></td>
                                 </tr>
                             `;

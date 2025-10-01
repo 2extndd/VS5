@@ -24,12 +24,18 @@ CREATE TABLE IF NOT EXISTS items
     title      TEXT,
     price      NUMERIC,
     currency   TEXT,
-    timestamp  NUMERIC,
+    timestamp  NUMERIC,  -- When item was published on Vinted
     photo_url  TEXT,
     brand_title TEXT,
     query_id   INTEGER,
+    found_at   NUMERIC,  -- When bot discovered this item
     FOREIGN KEY (query_id) REFERENCES queries (id)
 );
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_items_timestamp ON items(timestamp);
+CREATE INDEX IF NOT EXISTS idx_items_query_id ON items(query_id);
+CREATE INDEX IF NOT EXISTS idx_items_found_at ON items(found_at);
 
 -- Allowlist table
 CREATE TABLE IF NOT EXISTS allowlist
