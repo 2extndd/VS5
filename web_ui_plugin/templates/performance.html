@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}Performance Metrics - VS5{% endblock %}
+
+{% block head %}
+<style>
+    .metric-card {
+        border-radius: 10px;
+        transition: transform 0.2s;
+    }
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+    }
+    .metric-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    .stage-timeline {
+        position: relative;
+        padding: 20px 0;
+    }
+    .stage-step {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 15px;
+        background: white;
+        border-radius: 8px;
+        border-left: 4px solid #007bff;
+    }
+    .stage-step .step-number {
+        background: #007bff;
+        color: white;
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 15px;
+    }
+    .stage-step .step-content {
+        flex: 1;
+    }
+    .stage-step .step-time {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #28a745;
+    }
+    .progress-bar-container {
+        height: 30px;
+        background: #f0f0f0;
+        border-radius: 5px;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+    .progress-segment {
+        height: 100%;
+        float: left;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="bi bi-speedometer2"></i> Performance Metrics</h1>
+                <button class="btn btn-primary" onclick="refreshMetrics()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+
+            {% if not profiler_available %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> Performance profiler is not available. 
+                Please redeploy the application to enable performance monitoring.
+            </div>
+            {% endif %}
+
+            <!-- Last Update Time -->
+            <div class="mb-3">
+                <small class="text-muted">Last updated: <span id="last-update-time">Never</span></small>
+            </div>
+
+            <!-- Key Metrics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card metric-card bg-primary text-white">
+                        <div class="card-body text-center">
+                            <i class="bi bi-hourglass-split" style="font-size: 2rem;"></i>
+                            <div class="metric-value" id="total-latency">-</div>
+                            <div class="metric-label text-white">Avg Item Latency</div>
+                            <small>(Publication → Detection)</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card metric-card bg-success text-white">
+                        <div class="card-body text-center">
+                            <i class="bi bi-wifi" style="font-size: 2rem;"></i>
+                            <div class="metric-value" id="api-response-time">-</div>
+                            <div class="metric-label text-white">Avg API Response</div>
+                            <small>(HTTP Request)</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card metric-card bg-info text-white">
+                        <div class="card-body text-center">
+                            <i class="bi bi-database" style="font-size: 2rem;"></i>
+                            <div class="metric-value" id="db-check-time">-</div>
+                            <div class="metric-label text-white">Avg DB Check</div>
+                            <small>(Duplicate Detection)</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card metric-card bg-warning text-dark">
+                        <div class="card-body text-center">
+                            <i class="bi bi-database-add" style="font-size: 2rem;"></i>
+                            <div class="metric-value" id="db-insert-time">-</div>
+                            <div class="metric-label">Avg DB Insert</div>
+                            <small>(Save to Database)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processing Timeline -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-dark text-white">
+                            <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Processing Pipeline</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="stage-timeline" id="stage-timeline">
+                                <!-- Will be populated by JavaScript -->
+                                <div class="text-center text-muted">
+                                    <i class="bi bi-arrow-clockwise"></i> Loading metrics...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Statistics Table -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0"><i class="bi bi-table"></i> Detailed Statistics</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Metric</th>
+                                            <th>Min</th>
+                                            <th>Average</th>
+                                            <th>Max</th>
+                                            <th>Samples</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="stats-table-body">
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">
+                                                <i class="bi bi-arrow-clockwise"></i> Loading...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Breakdown Chart -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-dark text-white">
+                            <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Time Distribution</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="progress-bar-container" id="time-distribution">
+                                <!-- Will be populated by JavaScript -->
+                            </div>
+                            <div class="mt-3" id="distribution-legend">
+                                <!-- Legend will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+// Metric name mapping for better display
+const metricNames = {
+    'total_latency': 'Item Publication → Detection',
+    'api_request_to_response': 'HTTP Request → Response',
+    'db_check_time': 'Database Duplicate Check',
+    'db_insert_time': 'Database Insert',
+    'item_published_to_found': 'Item Discovery Latency',
+    'cycle_start_to_api_request': 'Cycle Start → API Request',
+    'response_parsing': 'Response Parsing'
+};
+
+const metricColors = {
+    'cycle_start_to_api_request': '#007bff',
+    'api_request_to_response': '#28a745',
+    'response_parsing': '#17a2b8',
+    'db_check_time': '#ffc107',
+    'db_insert_time': '#fd7e14',
+    'total_latency': '#6f42c1'
+};
+
+function formatTime(ms) {
+    if (ms < 1000) {
+        return ms.toFixed(0) + ' ms';
+    } else {
+        return (ms / 1000).toFixed(2) + ' s';
+    }
+}
+
+function refreshMetrics() {
+    fetch('/api/performance')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.available) {
+                console.error('Profiler not available:', data.error);
+                return;
+            }
+
+            // Update timestamp
+            document.getElementById('last-update-time').textContent = data.timestamp;
+
+            // Update key metrics
+            const stats = data.statistics;
+            
+            if (stats.total_latency) {
+                document.getElementById('total-latency').textContent = formatTime(stats.total_latency.avg_ms);
+            }
+            if (stats.api_request_to_response) {
+                document.getElementById('api-response-time').textContent = formatTime(stats.api_request_to_response.avg_ms);
+            }
+            if (stats.db_check_time) {
+                document.getElementById('db-check-time').textContent = formatTime(stats.db_check_time.avg_ms);
+            }
+            if (stats.db_insert_time) {
+                document.getElementById('db-insert-time').textContent = formatTime(stats.db_insert_time.avg_ms);
+            }
+
+            // Update timeline
+            updateTimeline(stats);
+
+            // Update statistics table
+            updateStatsTable(stats);
+
+            // Update time distribution
+            updateTimeDistribution(stats);
+        })
+        .catch(error => {
+            console.error('Error fetching metrics:', error);
+        });
+}
+
+function updateTimeline(stats) {
+    const timeline = document.getElementById('stage-timeline');
+    
+    const stages = [
+        { key: 'cycle_start_to_api_request', label: 'Proxy Selection & Preparation', icon: 'shield-check' },
+        { key: 'api_request_to_response', label: 'Vinted API Request', icon: 'wifi' },
+        { key: 'response_parsing', label: 'Response Parsing', icon: 'file-earmark-code' },
+        { key: 'db_check_time', label: 'Duplicate Check', icon: 'database-check' },
+        { key: 'db_insert_time', label: 'Save to Database', icon: 'database-add' },
+        { key: 'total_latency', label: 'Total Item Latency', icon: 'hourglass-split' }
+    ];
+
+    let html = '';
+    let stepNum = 1;
+
+    for (const stage of stages) {
+        if (stats[stage.key]) {
+            const stat = stats[stage.key];
+            html += `
+                <div class="stage-step">
+                    <div class="step-number">${stepNum}</div>
+                    <div class="step-content">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-${stage.icon}"></i>
+                                <strong>${stage.label}</strong>
+                            </div>
+                            <div class="step-time">${formatTime(stat.avg_ms)}</div>
+                        </div>
+                        <div class="small text-muted mt-1">
+                            Min: ${formatTime(stat.min_ms)} | Max: ${formatTime(stat.max_ms)} | Samples: ${stat.count}
+                        </div>
+                    </div>
+                </div>
+            `;
+            stepNum++;
+        }
+    }
+
+    if (html === '') {
+        html = '<div class="text-center text-muted">No metrics available yet. Wait for the bot to process some items.</div>';
+    }
+
+    timeline.innerHTML = html;
+}
+
+function updateStatsTable(stats) {
+    const tbody = document.getElementById('stats-table-body');
+    let html = '';
+
+    for (const [key, stat] of Object.entries(stats)) {
+        const displayName = metricNames[key] || key;
+        html += `
+            <tr>
+                <td><strong>${displayName}</strong></td>
+                <td>${formatTime(stat.min_ms)}</td>
+                <td><strong>${formatTime(stat.avg_ms)}</strong></td>
+                <td>${formatTime(stat.max_ms)}</td>
+                <td><span class="badge bg-primary">${stat.count}</span></td>
+            </tr>
+        `;
+    }
+
+    if (html === '') {
+        html = '<tr><td colspan="5" class="text-center text-muted">No data available yet</td></tr>';
+    }
+
+    tbody.innerHTML = html;
+}
+
+function updateTimeDistribution(stats) {
+    const container = document.getElementById('time-distribution');
+    const legend = document.getElementById('distribution-legend');
+
+    // Calculate total time
+    let totalTime = 0;
+    const relevantMetrics = ['cycle_start_to_api_request', 'api_request_to_response', 'response_parsing', 'db_check_time', 'db_insert_time'];
+    
+    for (const key of relevantMetrics) {
+        if (stats[key]) {
+            totalTime += stats[key].avg_ms;
+        }
+    }
+
+    if (totalTime === 0) {
+        container.innerHTML = '<div class="text-center text-muted p-3">No data available</div>';
+        legend.innerHTML = '';
+        return;
+    }
+
+    // Create segments
+    let html = '';
+    let legendHtml = '<div class="row">';
+
+    for (const key of relevantMetrics) {
+        if (stats[key]) {
+            const stat = stats[key];
+            const percentage = (stat.avg_ms / totalTime) * 100;
+            const color = metricColors[key] || '#6c757d';
+            const displayName = metricNames[key] || key;
+
+            html += `
+                <div class="progress-segment" style="width: ${percentage}%; background-color: ${color};">
+                    ${percentage > 10 ? formatTime(stat.avg_ms) : ''}
+                </div>
+            `;
+
+            legendHtml += `
+                <div class="col-md-4 mb-2">
+                    <div class="d-flex align-items-center">
+                        <div style="width: 20px; height: 20px; background-color: ${color}; border-radius: 3px; margin-right: 8px;"></div>
+                        <div>
+                            <small><strong>${displayName}</strong></small><br>
+                            <small class="text-muted">${formatTime(stat.avg_ms)} (${percentage.toFixed(1)}%)</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    legendHtml += '</div>';
+
+    container.innerHTML = html;
+    legend.innerHTML = legendHtml;
+}
+
+// Auto-refresh every 10 seconds
+setInterval(refreshMetrics, 10000);
+
+// Initial load
+refreshMetrics();
+</script>
+{% endblock %}
+
