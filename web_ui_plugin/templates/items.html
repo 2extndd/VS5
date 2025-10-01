@@ -33,22 +33,13 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-5">
-                            <div class="form-group mb-3">
-                                <label for="limit" class="form-label fw-semibold">Number of Items</label>
-                                <select class="form-select" id="limit" name="limit">
-                                    <option value="10" {% if limit== 10 %}selected{% endif %}>10 items</option>
-                                    <option value="25" {% if limit== 25 %}selected{% endif %}>25 items</option>
-                                    <option value="50" {% if limit== 50 %}selected{% endif %}>50 items</option>
-                                    <option value="100" {% if limit== 100 %}selected{% endif %}>100 items</option>
-                                    <option value="0" {% if limit== 0 %}selected{% endif %}>All items</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-2 d-flex align-items-center">
-                            <button type="submit" class="btn btn-primary w-100">
+                        <div class="col-md-7 d-flex align-items-center">
+                            <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-search me-1"></i> Apply Filter
                             </button>
+                            <span class="ms-3 text-muted">
+                                Показывается по {{ per_page }} вещей на странице
+                            </span>
                         </div>
                     </div>
                 </form>
@@ -180,6 +171,62 @@
                     </table>
                 </div>
             </div>
+            
+            <!-- Pagination -->
+            {% if total_pages > 1 %}
+            <div class="card-footer">
+                <nav aria-label="Items pagination">
+                    <ul class="pagination justify-content-center mb-0">
+                        <!-- Previous button -->
+                        <li class="page-item {% if not has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="?query={{ selected_query }}&page={{ page - 1 }}" {% if not has_prev %}tabindex="-1"{% endif %}>
+                                <i class="bi bi-chevron-left"></i> Предыдущая
+                            </a>
+                        </li>
+                        
+                        <!-- Page numbers -->
+                        {% set start_page = [1, page - 2]|max %}
+                        {% set end_page = [total_pages, page + 2]|min %}
+                        
+                        {% if start_page > 1 %}
+                            <li class="page-item">
+                                <a class="page-link" href="?query={{ selected_query }}&page=1">1</a>
+                            </li>
+                            {% if start_page > 2 %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endif %}
+                        
+                        {% for p in range(start_page, end_page + 1) %}
+                            <li class="page-item {% if p == page %}active{% endif %}">
+                                <a class="page-link" href="?query={{ selected_query }}&page={{ p }}">{{ p }}</a>
+                            </li>
+                        {% endfor %}
+                        
+                        {% if end_page < total_pages %}
+                            {% if end_page < total_pages - 1 %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                            <li class="page-item">
+                                <a class="page-link" href="?query={{ selected_query }}&page={{ total_pages }}">{{ total_pages }}</a>
+                            </li>
+                        {% endif %}
+                        
+                        <!-- Next button -->
+                        <li class="page-item {% if not has_next %}disabled{% endif %}">
+                            <a class="page-link" href="?query={{ selected_query }}&page={{ page + 1 }}" {% if not has_next %}tabindex="-1"{% endif %}>
+                                Следующая <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <div class="text-center mt-2">
+                    <small class="text-muted">
+                        Страница {{ page }} из {{ total_pages }} (всего вещей: {{ total_items }})
+                    </small>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -230,10 +277,10 @@
             // Получаем текущие параметры фильтра из URL
             const urlParams = new URLSearchParams(window.location.search);
             const query = urlParams.get('query') || '';
-            const limit = urlParams.get('limit') || '50';
+            const page = urlParams.get('page') || '1';
             
             // Запрашиваем обновленные данные
-            fetch(`/api/items_list?query=${encodeURIComponent(query)}&limit=${limit}`)
+            fetch(`/api/items_list?query=${encodeURIComponent(query)}&page=${page}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.items && data.items.length > 0) {

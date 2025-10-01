@@ -876,6 +876,88 @@ def get_items(limit=50, query=None):
             conn.close()
 
 
+def get_items_paginated(page=1, per_page=20, query=None):
+    """Get items with pagination support"""
+    conn = None
+    try:
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
+        
+        offset = (page - 1) * per_page
+        
+        if query:
+            if db_type == 'postgresql':
+                # Get the query_id for the given query
+                cursor.execute("SELECT id FROM queries WHERE query=%s", (query,))
+                result = cursor.fetchone()
+                if result:
+                    query_id = safe_get_result(result, 0)
+                    # Get items with the matching query_id with pagination
+                    cursor.execute("""
+                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title 
+                        FROM items i JOIN queries q ON i.query_id = q.id 
+                        WHERE i.query_id=%s ORDER BY i.timestamp DESC LIMIT %s OFFSET %s
+                    """, (query_id, per_page, offset))
+                    items = cursor.fetchall()
+                    
+                    # Get total count for this query
+                    cursor.execute("SELECT COUNT(*) FROM items WHERE query_id=%s", (query_id,))
+                    total = cursor.fetchone()[0]
+                    return items, total
+                else:
+                    return [], 0
+            else:
+                # SQLite
+                cursor.execute("SELECT id FROM queries WHERE query=?", (query,))
+                result = cursor.fetchone()
+                if result:
+                    query_id = safe_get_result(result, 0)
+                    cursor.execute("""
+                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title 
+                        FROM items i JOIN queries q ON i.query_id = q.id 
+                        WHERE i.query_id=? ORDER BY i.timestamp DESC LIMIT ? OFFSET ?
+                    """, (query_id, per_page, offset))
+                    items = cursor.fetchall()
+                    
+                    cursor.execute("SELECT COUNT(*) FROM items WHERE query_id=?", (query_id,))
+                    total = cursor.fetchone()[0]
+                    return items, total
+                else:
+                    return [], 0
+        else:
+            if db_type == 'postgresql':
+                # Get all items with pagination
+                cursor.execute("""
+                    SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title 
+                    FROM items i JOIN queries q ON i.query_id = q.id 
+                    ORDER BY i.timestamp DESC LIMIT %s OFFSET %s
+                """, (per_page, offset))
+                items = cursor.fetchall()
+                
+                cursor.execute("SELECT COUNT(*) FROM items")
+                total = cursor.fetchone()[0]
+                return items, total
+            else:
+                # SQLite
+                cursor.execute("""
+                    SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title 
+                    FROM items i JOIN queries q ON i.query_id = q.id 
+                    ORDER BY i.timestamp DESC LIMIT ? OFFSET ?
+                """, (per_page, offset))
+                items = cursor.fetchall()
+                
+                cursor.execute("SELECT COUNT(*) FROM items")
+                total = cursor.fetchone()[0]
+                return items, total
+                
+    except Exception:
+        print_exc()
+        return [], 0
+    finally:
+        if conn:
+            conn.close()
+
+
 def get_total_items_count():
     conn = None
     try:

@@ -604,9 +604,10 @@ def remove_all_queries():
 @app.route('/items')
 def items():
     query_id = request.args.get('query', '')  # Default to empty string instead of None
-    limit = int(request.args.get('limit', 50))
+    page = int(request.args.get('page', 1))
+    per_page = 20  # Fixed items per page
 
-    # Get items
+    # Get items with pagination
     query_string = None
     if query_id:
         # Get the actual query string for the given ID
@@ -616,9 +617,14 @@ def items():
                 query_string = q[1]
                 break
 
-    # If limit is 0, get all items (no limit)
-    items_limit = None if limit == 0 else limit
-    items_data = db.get_items(limit=items_limit, query=query_string)
+    # Get items with pagination
+    items_data, total_items = db.get_items_paginated(page=page, per_page=per_page, query=query_string)
+    
+    # Calculate pagination info
+    total_pages = (total_items + per_page - 1) // per_page  # Ceiling division
+    has_prev = page > 1
+    has_next = page < total_pages
+    
     formatted_items = []
 
     for item in items_data:
@@ -691,7 +697,12 @@ def items():
                            queries=formatted_queries,
                            selected_query=query_id,
                            selected_query_display=selected_query_display,
-                           limit=limit)
+                           page=page,
+                           total_pages=total_pages,
+                           total_items=total_items,
+                           per_page=per_page,
+                           has_prev=has_prev,
+                           has_next=has_next)
 
 
 @app.route('/config')
@@ -1694,13 +1705,13 @@ def api_recent_items():
 
 @app.route('/api/items_list')
 def api_items_list():
-    """API endpoint for items list page - used for AJAX refresh"""
+    """API endpoint for items list page - used for AJAX refresh with pagination"""
     try:
         query_string = request.args.get('query', '')
-        limit = int(request.args.get('limit', 50))
+        page = int(request.args.get('page', 1))
+        per_page = 20  # Fixed items per page
         
-        items_limit = None if limit == 0 else limit
-        items_data = db.get_items(limit=items_limit, query=query_string)
+        items_data, total_items = db.get_items_paginated(page=page, per_page=per_page, query=query_string)
         formatted_items = []
         
         for item in items_data:
@@ -1734,7 +1745,19 @@ def api_items_list():
                 logger.error(f"Error formatting item: {e}")
                 continue
         
-        return jsonify({'items': formatted_items})
+        # Calculate pagination info
+        total_pages = (total_items + per_page - 1) // per_page
+        has_prev = page > 1
+        has_next = page < total_pages
+        
+        return jsonify({
+            'items': formatted_items,
+            'page': page,
+            'total_pages': total_pages,
+            'total_items': total_items,
+            'has_prev': has_prev,
+            'has_next': has_next
+        })
     except Exception as e:
         logger.error(f"Error in api_items_list: {e}")
         return jsonify({'error': str(e)}), 500
