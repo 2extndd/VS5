@@ -353,24 +353,46 @@ def add_item_to_db(id, title, query_id, price, timestamp, photo_url, currency="E
             logger.warning(f"Invalid price '{price}' for item {id}, using 0.0")
             price_decimal = 0.0
         
-        # Use found_at if provided, otherwise use timestamp as fallback
+        # Check if found_at column exists
+        has_found_at = False
+        try:
+            if db_type == 'postgresql':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='items' AND column_name='found_at'")
+            else:
+                cursor.execute("PRAGMA table_info(items)")
+            result = cursor.fetchall()
+            has_found_at = bool(result)
+        except:
+            has_found_at = False
+        
+        # Use found_at if provided and column exists, otherwise use timestamp as fallback
         if found_at is None:
             found_at = timestamp
         
-        if db_type == 'postgresql':
-            # Insert into db the id and the query_id related to the item
-            cursor.execute(
-                "INSERT INTO items (item, title, price, currency, timestamp, photo_url, brand_title, query_id, found_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (id, title, price_decimal, currency, timestamp, photo_url, brand_title, query_id, found_at))
-            # Update the last item for the query
-            cursor.execute("UPDATE queries SET last_item=%s WHERE id=%s", (timestamp, query_id))
+        if has_found_at:
+            # Insert WITH found_at column
+            if db_type == 'postgresql':
+                cursor.execute(
+                    "INSERT INTO items (item, title, price, currency, timestamp, photo_url, brand_title, query_id, found_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (id, title, price_decimal, currency, timestamp, photo_url, brand_title, query_id, found_at))
+                cursor.execute("UPDATE queries SET last_item=%s WHERE id=%s", (timestamp, query_id))
+            else:
+                cursor.execute(
+                    "INSERT INTO items (item, title, price, currency, timestamp, photo_url, brand_title, query_id, found_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (id, title, price_decimal, currency, timestamp, photo_url, brand_title, query_id, found_at))
+                cursor.execute("UPDATE queries SET last_item=? WHERE id=?", (timestamp, query_id))
         else:
-            # Insert into db the id and the query_id related to the item
-            cursor.execute(
-                "INSERT INTO items (item, title, price, currency, timestamp, photo_url, brand_title, query_id, found_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (id, title, price_decimal, currency, timestamp, photo_url, brand_title, query_id, found_at))
-            # Update the last item for the query
-            cursor.execute("UPDATE queries SET last_item=? WHERE id=?", (timestamp, query_id))
+            # Insert WITHOUT found_at column (backward compatibility)
+            if db_type == 'postgresql':
+                cursor.execute(
+                    "INSERT INTO items (item, title, price, currency, timestamp, photo_url, brand_title, query_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (id, title, price_decimal, currency, timestamp, photo_url, brand_title, query_id))
+                cursor.execute("UPDATE queries SET last_item=%s WHERE id=%s", (timestamp, query_id))
+            else:
+                cursor.execute(
+                    "INSERT INTO items (item, title, price, currency, timestamp, photo_url, brand_title, query_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (id, title, price_decimal, currency, timestamp, photo_url, brand_title, query_id))
+                cursor.execute("UPDATE queries SET last_item=? WHERE id=?", (timestamp, query_id))
             
         conn.commit()
         logger.info(f"Successfully added item {id} to database with price {price_decimal}")
@@ -807,6 +829,21 @@ def get_items(limit=50, query=None):
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
         
+        # Check if found_at column exists
+        has_found_at = False
+        try:
+            if db_type == 'postgresql':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='items' AND column_name='found_at'")
+            else:
+                cursor.execute("PRAGMA table_info(items)")
+            result = cursor.fetchall()
+            has_found_at = bool(result)
+        except:
+            has_found_at = False
+        
+        # Build SELECT statement based on whether found_at exists
+        found_at_col = ", i.found_at" if has_found_at else ""
+        
         if query:
             if db_type == 'postgresql':
                 # Get the query_id for the given query
@@ -816,14 +853,14 @@ def get_items(limit=50, query=None):
                     query_id = safe_get_result(result, 0)
                     # Get items with the matching query_id
                     if limit is None:
-                        cursor.execute("""
-                            SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at 
+                        cursor.execute(f"""
+                            SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} 
                             FROM items i JOIN queries q ON i.query_id = q.id 
                             WHERE i.query_id=%s ORDER BY i.timestamp DESC
                         """, (query_id,))
                     else:
-                        cursor.execute("""
-                            SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at 
+                        cursor.execute(f"""
+                            SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} 
                             FROM items i JOIN queries q ON i.query_id = q.id 
                             WHERE i.query_id=%s ORDER BY i.timestamp DESC LIMIT %s
                         """, (query_id, limit))
@@ -838,11 +875,11 @@ def get_items(limit=50, query=None):
                     # Get items with the matching query_id
                     if limit is None:
                         cursor.execute(
-                            "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC",
+                            f"SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC",
                             (query_id,))
                     else:
                         cursor.execute(
-                            "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC LIMIT ?",
+                            f"SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} FROM items i JOIN queries q ON i.query_id = q.id WHERE i.query_id=? ORDER BY i.timestamp DESC LIMIT ?",
                             (query_id, limit))
                 else:
                     return []
@@ -850,14 +887,14 @@ def get_items(limit=50, query=None):
             if db_type == 'postgresql':
                 # Join with queries table to get the query text
                 if limit is None:
-                    cursor.execute("""
-                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at 
+                    cursor.execute(f"""
+                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} 
                         FROM items i JOIN queries q ON i.query_id = q.id 
                         ORDER BY i.timestamp DESC
                     """)
                 else:
-                    cursor.execute("""
-                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at 
+                    cursor.execute(f"""
+                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} 
                         FROM items i JOIN queries q ON i.query_id = q.id 
                         ORDER BY i.timestamp DESC LIMIT %s
                     """, (limit,))
@@ -865,10 +902,10 @@ def get_items(limit=50, query=None):
                 # Join with queries table to get the query text
                 if limit is None:
                     cursor.execute(
-                        "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC")
+                        f"SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC")
                 else:
                     cursor.execute(
-                        "SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC LIMIT ?",
+                        f"SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} FROM items i JOIN queries q ON i.query_id = q.id ORDER BY i.timestamp DESC LIMIT ?",
                         (limit,))
                     
         return cursor.fetchall()
@@ -887,6 +924,20 @@ def get_items_paginated(page=1, per_page=20, query=None):
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
         
+        # Check if found_at column exists
+        has_found_at = False
+        try:
+            if db_type == 'postgresql':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='items' AND column_name='found_at'")
+            else:
+                cursor.execute("PRAGMA table_info(items)")
+            result = cursor.fetchall()
+            has_found_at = bool(result)
+        except:
+            has_found_at = False
+        
+        found_at_col = ", i.found_at" if has_found_at else ""
+        
         offset = (page - 1) * per_page
         
         if query:
@@ -897,8 +948,8 @@ def get_items_paginated(page=1, per_page=20, query=None):
                 if result:
                     query_id = safe_get_result(result, 0)
                     # Get items with the matching query_id with pagination
-                    cursor.execute("""
-                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at 
+                    cursor.execute(f"""
+                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} 
                         FROM items i JOIN queries q ON i.query_id = q.id 
                         WHERE i.query_id=%s ORDER BY i.timestamp DESC LIMIT %s OFFSET %s
                     """, (query_id, per_page, offset))
@@ -916,8 +967,8 @@ def get_items_paginated(page=1, per_page=20, query=None):
                 result = cursor.fetchone()
                 if result:
                     query_id = safe_get_result(result, 0)
-                    cursor.execute("""
-                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at 
+                    cursor.execute(f"""
+                        SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} 
                         FROM items i JOIN queries q ON i.query_id = q.id 
                         WHERE i.query_id=? ORDER BY i.timestamp DESC LIMIT ? OFFSET ?
                     """, (query_id, per_page, offset))
@@ -931,8 +982,8 @@ def get_items_paginated(page=1, per_page=20, query=None):
         else:
             if db_type == 'postgresql':
                 # Get all items with pagination
-                cursor.execute("""
-                    SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at 
+                cursor.execute(f"""
+                    SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} 
                     FROM items i JOIN queries q ON i.query_id = q.id 
                     ORDER BY i.timestamp DESC LIMIT %s OFFSET %s
                 """, (per_page, offset))
@@ -943,8 +994,8 @@ def get_items_paginated(page=1, per_page=20, query=None):
                 return items, total
             else:
                 # SQLite
-                cursor.execute("""
-                    SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title, i.found_at 
+                cursor.execute(f"""
+                    SELECT i.item, i.title, i.price, i.currency, i.timestamp, q.query, i.photo_url, i.brand_title{found_at_col} 
                     FROM items i JOIN queries q ON i.query_id = q.id 
                     ORDER BY i.timestamp DESC LIMIT ? OFFSET ?
                 """, (per_page, offset))
