@@ -264,26 +264,35 @@
                     </div>
                     <div class="col-md-6">
                         <h6 class="text-muted">Configuration</h6>
-                        <div class="mb-2">
-                            <small class="text-muted">Redeploy Threshold:</small>
-                            <span class="fw-bold ms-2" id="redeploy-threshold">4 minutes</span>
-                        </div>
-                        <div class="mb-2">
-                            <small class="text-muted">Min HTTP Errors:</small>
-                            <span class="fw-bold ms-2" id="max-errors">5</span>
-                        </div>
-                        <div class="mb-3">
-                            <small class="text-muted">Redeploy Needed:</small>
-                            <span class="fw-bold ms-2" id="redeploy-needed">No</span>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-outline-info btn-sm" onclick="refreshRedeployStatus()">
-                                <i class="bi bi-arrow-clockwise"></i> Refresh Status
-                            </button>
-                            <button type="button" class="btn btn-warning btn-sm" onclick="forceRedeploy()" id="force-redeploy-btn">
-                                <i class="bi bi-lightning"></i> Force Redeploy
-                            </button>
-                        </div>
+                        <form id="redeploy-config-form" class="mb-3">
+                            <div class="mb-3">
+                                <label for="redeploy-threshold-input" class="form-label small">Redeploy Threshold (minutes):</label>
+                                <input type="number" class="form-control form-control-sm" id="redeploy-threshold-input" 
+                                       name="redeploy_threshold_minutes" value="4" min="1" max="30" step="1">
+                                <small class="text-muted">How long to wait before triggering redeploy</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="max-errors-input" class="form-label small">Min HTTP Errors:</label>
+                                <input type="number" class="form-control form-control-sm" id="max-errors-input" 
+                                       name="max_http_errors" value="5" min="1" max="20" step="1">
+                                <small class="text-muted">Minimum errors needed to trigger redeploy</small>
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted">Redeploy Needed:</small>
+                                <span class="fw-bold ms-2" id="redeploy-needed">No</span>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-save"></i> Save Config
+                                </button>
+                                <button type="button" class="btn btn-outline-info btn-sm" onclick="refreshRedeployStatus()">
+                                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                                </button>
+                                <button type="button" class="btn btn-warning btn-sm" onclick="forceRedeploy()" id="force-redeploy-btn">
+                                    <i class="bi bi-lightning"></i> Force Redeploy
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -610,10 +619,12 @@
         document.getElementById('last-redeploy-time').textContent = 
             data.last_redeploy_time ? new Date(data.last_redeploy_time).toLocaleString() : 'Never';
         
-        // Update configuration
-        document.getElementById('redeploy-threshold').textContent = 
-            (data.redeploy_threshold_minutes || 4) + ' minutes';
-        document.getElementById('max-errors').textContent = data.max_http_errors || '5';
+        // Update configuration form values
+        const thresholdValue = data.redeploy_threshold_minutes || 4;
+        const errorsValue = data.max_http_errors || 5;
+        document.getElementById('redeploy-threshold-input').value = thresholdValue;
+        document.getElementById('max-errors-input').value = errorsValue;
+        
         document.getElementById('redeploy-needed').textContent = data.redeploy_needed ? 'Yes' : 'No';
         
         // Update redeploy needed styling
@@ -660,6 +671,38 @@
             button.innerHTML = originalText;
         });
     }
+
+    // Redeploy Config Form Handler
+    document.getElementById('redeploy-config-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            redeploy_threshold_minutes: formData.get('redeploy_threshold_minutes'),
+            max_http_errors: formData.get('max_http_errors')
+        };
+        
+        fetch('/save_redeploy_config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert('Redeploy configuration saved successfully!');
+                refreshRedeployStatus();
+            } else {
+                alert('Error saving configuration: ' + (result.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error saving configuration: ' + error.message);
+        });
+    });
 
     // Proxy System Functions
     function refreshProxyStatus() {

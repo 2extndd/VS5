@@ -6,7 +6,7 @@ import os
 import time
 import threading
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from logger import get_logger
 
 # Импортируем конфигурацию Railway
@@ -40,12 +40,13 @@ class RailwayRedeployManager:
         self.first_429_time = None
         self.last_429_time = None
         
-        self.redeploy_threshold_minutes = 4
-        self.max_http_errors = 5  # Минимальное количество HTTP ошибок подряд (любых: 401, 403, 429)
+        # Загружаем параметры из БД или используем значения по умолчанию
+        self.redeploy_threshold_minutes = self._get_redeploy_threshold()
+        self.max_http_errors = self._get_max_http_errors()
         
         # Защита от частых редеплоев
         self.last_redeploy_time = self._load_last_redeploy_time()
-        self.min_redeploy_interval_minutes = 10
+        self.min_redeploy_interval_minutes = 3  # Изменено с 10 на 3 минуты
         
         self.lock = threading.Lock()
         
@@ -54,6 +55,28 @@ class RailwayRedeployManager:
         logger.info(f"[REDEPLOY] Threshold: {self.redeploy_threshold_minutes} minutes")
         if self.last_redeploy_time:
             logger.info(f"[REDEPLOY] Last redeploy: {self.last_redeploy_time}")
+    
+    def _get_redeploy_threshold(self):
+        """Получить порог редеплоя из БД"""
+        try:
+            import db
+            threshold_str = db.get_parameter("redeploy_threshold_minutes")
+            if threshold_str:
+                return int(threshold_str)
+        except Exception as e:
+            logger.debug(f"[REDEPLOY] Could not load threshold from DB: {e}")
+        return 4  # По умолчанию 4 минуты
+    
+    def _get_max_http_errors(self):
+        """Получить максимальное количество ошибок из БД"""
+        try:
+            import db
+            errors_str = db.get_parameter("max_http_errors")
+            if errors_str:
+                return int(errors_str)
+        except Exception as e:
+            logger.debug(f"[REDEPLOY] Could not load max_http_errors from DB: {e}")
+        return 5  # По умолчанию 5 ошибок
     
     def _load_last_redeploy_time(self):
         """Загрузить время последнего редеплоя из базы данных"""
@@ -78,7 +101,7 @@ class RailwayRedeployManager:
     def report_403_error(self):
         """Сообщить о получении 403 ошибки"""
         with self.lock:
-            current_time = datetime.now()
+            current_time = datetime.now(timezone(timedelta(hours=3)))
             
             # Если это первая 403 ошибка или прошло много времени с последней
             if self.first_403_time is None or (current_time - self.last_403_time).total_seconds() > 300:  # 5 минут
@@ -97,7 +120,7 @@ class RailwayRedeployManager:
     def report_401_error(self):
         """Сообщить о получении 401 ошибки"""
         with self.lock:
-            current_time = datetime.now()
+            current_time = datetime.now(timezone(timedelta(hours=3)))
             
             # Если это первая 401 ошибка или прошло много времени с последней
             if self.first_401_time is None or (current_time - self.last_401_time).total_seconds() > 300:  # 5 минут
@@ -116,7 +139,7 @@ class RailwayRedeployManager:
     def report_429_error(self):
         """Сообщить о получении 429 ошибки"""
         with self.lock:
-            current_time = datetime.now()
+            current_time = datetime.now(timezone(timedelta(hours=3)))
             
             # Если это первая 429 ошибка или прошло много времени с последней
             if self.first_429_time is None or (current_time - self.last_429_time).total_seconds() > 300:  # 5 минут
@@ -161,7 +184,7 @@ class RailwayRedeployManager:
         first_error_time = min(first_error_times)
         total_errors = self.error_403_count + self.error_401_count + self.error_429_count
         
-        current_time = datetime.now()
+        current_time = datetime.now(timezone(timedelta(hours=3)))
         time_since_first_error = current_time - first_error_time
         
         # Условия для редеплоя:
@@ -233,7 +256,7 @@ class RailwayRedeployManager:
                 result = response.json()
                 if "errors" not in result:
                     logger.info("[REDEPLOY] ✅ Railway redeploy initiated successfully!")
-                    self.last_redeploy_time = datetime.now()
+                    self.last_redeploy_time = datetime.now(timezone(timedelta(hours=3)))
                     self._save_last_redeploy_time(self.last_redeploy_time)
                     self._reset_error_tracking()
                 else:
@@ -333,7 +356,7 @@ class RailwayRedeployManager:
             
             if result.returncode == 0:
                 logger.info("[REDEPLOY] ✅ Railway redeploy via CLI successful!")
-                self.last_redeploy_time = datetime.now()
+                self.last_redeploy_time = datetime.now(timezone(timedelta(hours=3)))
                 self._save_last_redeploy_time(self.last_redeploy_time)
                 self._reset_error_tracking()
                 return True
@@ -358,7 +381,7 @@ class RailwayRedeployManager:
             logger.critical("[REDEPLOY] Using emergency redeploy method - forcing app restart")
             
             # Обновляем время редеплоя
-            self.last_redeploy_time = datetime.now()
+            self.last_redeploy_time = datetime.now(timezone(timedelta(hours=3)))
             self._save_last_redeploy_time(self.last_redeploy_time)
             self._reset_error_tracking()
             
@@ -410,7 +433,7 @@ class RailwayRedeployManager:
     def get_status(self):
         """Получить текущий статус системы редеплоя"""
         with self.lock:
-            current_time = datetime.now()
+            current_time = datetime.now(timezone(timedelta(hours=3)))
             
             # Находим самую раннюю ошибку из всех типов
             first_error_times = [t for t in [self.first_403_time, self.first_401_time, self.first_429_time] if t is not None]

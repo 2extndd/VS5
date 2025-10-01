@@ -20,8 +20,8 @@ _TEST_URL = "https://www.vinted.fr/"
 _TEST_TIMEOUT = 2  # seconds
 # Maximum number of concurrent workers for proxy checking
 MAX_PROXY_WORKERS = 10
-# Time interval in seconds after which proxies should be rechecked (6 hours)
-PROXY_RECHECK_INTERVAL = 6 * 60 * 60
+# Time interval in seconds after which proxies should be rechecked (1 hour)
+PROXY_RECHECK_INTERVAL = 1 * 60 * 60
 
 def fetch_proxies_from_link(url: str) -> List[str]:
     """

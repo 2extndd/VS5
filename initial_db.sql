@@ -62,7 +62,7 @@ VALUES ('telegram_enabled', 'False'),
 
        -- RSS parameters removed
 
-       ('version', '1.3'),
+       ('version', '1.35'),
        ('github_url', 'https://github.com/Fuyucch1/Vinted-Notifications'),
 
        ('items_per_query', '20'),
@@ -74,6 +74,8 @@ VALUES ('telegram_enabled', 'False'),
        ('last_proxy_check_time', '0'),
        
        ('last_redeploy_time', ''),
+       ('redeploy_threshold_minutes', '4'),
+       ('max_http_errors', '5'),
        
        ('vinted_api_requests', '0'),
        ('bot_start_time', '0');

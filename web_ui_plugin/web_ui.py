@@ -1641,6 +1641,32 @@ def proxy_status():
             "total_cached_proxies": 0
         }), 500
 
+@app.route('/save_redeploy_config', methods=['POST'])
+def save_redeploy_config():
+    """Save redeploy configuration parameters"""
+    try:
+        data = request.get_json()
+        
+        redeploy_threshold = data.get('redeploy_threshold_minutes')
+        max_http_errors = data.get('max_http_errors')
+        
+        if redeploy_threshold:
+            db.set_parameter('redeploy_threshold_minutes', str(redeploy_threshold))
+        
+        if max_http_errors:
+            db.set_parameter('max_http_errors', str(max_http_errors))
+        
+        logger.info(f"[REDEPLOY] Config updated: threshold={redeploy_threshold}min, max_errors={max_http_errors}")
+        
+        return jsonify({
+            "success": True,
+            "message": "Configuration saved successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"[REDEPLOY] Error saving config: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/force_redeploy', methods=['POST'])
 def force_redeploy():
     """Принудительный редеплой Railway"""
