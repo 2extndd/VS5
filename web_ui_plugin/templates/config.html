@@ -217,6 +217,60 @@
 
 
 
+<!-- Migration Status Check -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white d-flex align-items-center">
+                <i class="bi bi-database-check me-2"></i>
+                <h5 class="card-title mb-0">Delay Counter Status</h5>
+                <span class="badge bg-light text-dark ms-auto" id="migration-status-badge">Checking...</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Database Status</h6>
+                        <div class="mb-2">
+                            <small class="text-muted">Column found_at:</small>
+                            <span class="fw-bold ms-2" id="has-column-status">-</span>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Total items:</small>
+                            <span class="fw-bold ms-2" id="total-items-count">-</span>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Items with delay data:</small>
+                            <span class="fw-bold ms-2" id="items-with-delay">-</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Migration</h6>
+                        <div id="migration-instructions" style="display: none;" class="alert alert-warning">
+                            <strong>⚠️ Migration needed!</strong><br>
+                            Run this SQL on Railway PostgreSQL:<br>
+                            <code style="display: block; margin-top: 10px; padding: 10px; background: #f8f9fa;">
+ALTER TABLE items ADD COLUMN IF NOT EXISTS found_at NUMERIC;<br>
+UPDATE items SET found_at = timestamp WHERE found_at IS NULL;<br>
+CREATE INDEX IF NOT EXISTS idx_items_found_at ON items(found_at);
+                            </code>
+                            <a href="https://railway.app/project/101cc62f-b314-41d1-9b55-d58ae5c371ea" target="_blank" class="btn btn-warning btn-sm mt-2">
+                                <i class="bi bi-box-arrow-up-right"></i> Open Railway
+                            </a>
+                        </div>
+                        <div id="migration-success" style="display: none;" class="alert alert-success">
+                            <strong>✅ Migration applied!</strong><br>
+                            Delay counter is active and working.
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="checkMigrationStatus()">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh Status
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Railway Auto-Redeploy Monitoring -->
 <div class="row mt-4">
     <div class="col-md-12">
@@ -484,9 +538,14 @@
         refreshRedeployStatus();
         setInterval(refreshRedeployStatus, 30000);
         
-        // Auto-refresh proxy status every 45 seconds
+        // Auto-refresh status checks
+        checkMigrationStatus();  // Check migration status
         refreshProxyStatus();
+        refreshRedeployStatus();
+        
+        // Periodic refresh
         setInterval(refreshProxyStatus, 45000);
+        setInterval(checkMigrationStatus, 60000);  // Check migration every 60 seconds
     });
 
     // Country Allowlist Functions (without forms)
@@ -703,6 +762,43 @@
             alert('Error saving configuration: ' + error.message);
         });
     });
+
+    // Migration Status Check
+    function checkMigrationStatus() {
+        fetch('/api/check_found_at')
+            .then(response => response.json())
+            .then(data => {
+                updateMigrationStatus(data);
+            })
+            .catch(error => {
+                console.error('Error checking migration status:', error);
+                document.getElementById('migration-status-badge').textContent = 'Error';
+                document.getElementById('migration-status-badge').className = 'badge bg-danger ms-auto';
+            });
+    }
+
+    function updateMigrationStatus(data) {
+        // Update badge
+        const badge = document.getElementById('migration-status-badge');
+        if (data.has_column) {
+            badge.textContent = 'Active ✅';
+            badge.className = 'badge bg-success ms-auto';
+            document.getElementById('migration-success').style.display = 'block';
+            document.getElementById('migration-instructions').style.display = 'none';
+        } else {
+            badge.textContent = 'Migration Needed ⚠️';
+            badge.className = 'badge bg-warning ms-auto';
+            document.getElementById('migration-success').style.display = 'none';
+            document.getElementById('migration-instructions').style.display = 'block';
+        }
+
+        // Update stats
+        document.getElementById('has-column-status').textContent = data.has_column ? '✅ Exists' : '❌ Missing';
+        document.getElementById('has-column-status').className = data.has_column ? 'fw-bold ms-2 text-success' : 'fw-bold ms-2 text-danger';
+        
+        document.getElementById('total-items-count').textContent = data.total_items || '0';
+        document.getElementById('items-with-delay').textContent = data.items_with_found_at || '0';
+    }
 
     // Proxy System Functions
     function refreshProxyStatus() {

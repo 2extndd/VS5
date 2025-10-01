@@ -336,6 +336,12 @@ def index():
     # Get recent items (increased limit to 42)
     items = db.get_items(limit=42)
     formatted_items = []
+    
+    # Debug: log first item structure
+    if items and len(items) > 0:
+        logger.info(f"[DEBUG] First item has {len(items[0])} columns")
+        logger.info(f"[DEBUG] Item structure: {items[0]}")
+    
     for item in items:
         try:
             # Safe timestamp conversion with GMT+3
@@ -345,6 +351,7 @@ def index():
             delay_str = None
             if len(item) > 8 and item[8]:  # item[8] is found_at
                 delay_str = calculate_delay(item[4], item[8])
+                logger.info(f"[DEBUG] Calculated delay: {delay_str} (published: {item[4]}, found: {item[8]})")
             
             formatted_items.append({
                 'id': str(item[0]) if item[0] else 'Unknown',
@@ -1700,6 +1707,49 @@ def force_redeploy():
 # ============================================
 # API ENDPOINTS FOR AJAX AUTO-REFRESH
 # ============================================
+
+@app.route('/api/check_found_at')
+def check_found_at():
+    """Check if found_at column exists and has data"""
+    try:
+        conn, db_type = db.get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if column exists
+        has_column = False
+        try:
+            if db_type == 'postgresql':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='items' AND column_name='found_at'")
+            else:
+                cursor.execute("PRAGMA table_info(items)")
+            result = cursor.fetchall()
+            has_column = bool(result)
+        except:
+            has_column = False
+        
+        # Count items with found_at data
+        items_with_found_at = 0
+        total_items = 0
+        if has_column:
+            try:
+                cursor.execute("SELECT COUNT(*) FROM items")
+                total_items = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM items WHERE found_at IS NOT NULL")
+                items_with_found_at = cursor.fetchone()[0]
+            except:
+                pass
+        
+        conn.close()
+        
+        return jsonify({
+            'has_column': has_column,
+            'total_items': total_items,
+            'items_with_found_at': items_with_found_at,
+            'migration_needed': not has_column,
+            'message': 'Migration applied ✅' if has_column else 'Migration needed ❌'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/dashboard_stats')
 def api_dashboard_stats():
