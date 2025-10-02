@@ -121,6 +121,11 @@ class RailwayRedeployManager:
             
             self.last_403_time = current_time
             
+            # Логируем каждые 10 ошибок
+            total_errors = self.error_403_count + self.error_401_count + self.error_429_count
+            if total_errors % 10 == 0:
+                logger.warning(f"[REDEPLOY] 📊 Total errors reached: {total_errors} (403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count})")
+            
             # Проверяем, нужно ли делать редеплой
             self._check_redeploy_needed()
     
@@ -143,6 +148,11 @@ class RailwayRedeployManager:
             
             self.last_401_time = current_time
             
+            # Логируем каждые 10 ошибок
+            total_errors = self.error_403_count + self.error_401_count + self.error_429_count
+            if total_errors % 10 == 0:
+                logger.warning(f"[REDEPLOY] 📊 Total errors reached: {total_errors} (403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count})")
+            
             # Проверяем, нужно ли делать редеплой
             self._check_redeploy_needed()
     
@@ -164,6 +174,11 @@ class RailwayRedeployManager:
                 logger.warning(f"[REDEPLOY] 429 error #{self.error_429_count} detected at {current_time}")
             
             self.last_429_time = current_time
+            
+            # Логируем каждые 10 ошибок
+            total_errors = self.error_403_count + self.error_401_count + self.error_429_count
+            if total_errors % 10 == 0:
+                logger.warning(f"[REDEPLOY] 📊 Total errors reached: {total_errors} (403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count})")
             
             # Проверяем, нужно ли делать редеплой
             self._check_redeploy_needed()
@@ -208,13 +223,23 @@ class RailwayRedeployManager:
         current_time = datetime.now(timezone(timedelta(hours=3)))
         time_since_first_error = current_time - first_error_time
         
+        # Логируем текущее состояние при каждой проверке (если есть ошибки)
+        if total_errors >= 50:  # Логируем только если накопилось много
+            logger.info(f"[REDEPLOY] Check: {total_errors} errors, {time_since_first_error.total_seconds():.0f}s since first, success_streak: {self.success_streak}")
+        
         # КРИТИЧЕСКАЯ ПРОВЕРКА: Если накопилось 100+ ошибок - редеплоим НЕМЕДЛЕННО!
         if total_errors >= 100:
-            logger.critical(f"[REDEPLOY] 🚨 CRITICAL: {total_errors} errors accumulated!")
-            logger.critical(f"[REDEPLOY] 🚨 Forcing IMMEDIATE redeploy regardless of cooldown!")
+            logger.critical(f"[REDEPLOY] ════════════════════════════════════════")
+            logger.critical(f"[REDEPLOY] 🚨 CRITICAL THRESHOLD REACHED!")
+            logger.critical(f"[REDEPLOY] Total errors: {total_errors}")
             logger.critical(f"[REDEPLOY] - 403 errors: {self.error_403_count}")
             logger.critical(f"[REDEPLOY] - 401 errors: {self.error_401_count}")
             logger.critical(f"[REDEPLOY] - 429 errors: {self.error_429_count}")
+            logger.critical(f"[REDEPLOY] - Time since first error: {time_since_first_error}")
+            logger.critical(f"[REDEPLOY] - Success streak: {self.success_streak}")
+            logger.critical(f"[REDEPLOY] - Last redeploy: {self.last_redeploy_time}")
+            logger.critical(f"[REDEPLOY] 🚨 Forcing IMMEDIATE redeploy (bypassing cooldown)!")
+            logger.critical(f"[REDEPLOY] ════════════════════════════════════════")
             self._perform_redeploy()
             return
         
@@ -230,22 +255,34 @@ class RailwayRedeployManager:
             if (self.last_redeploy_time is None or 
                 (current_time - self.last_redeploy_time).total_seconds() >= self.min_redeploy_interval_minutes * 60):
                 
-                logger.critical(f"[REDEPLOY] Redeploy conditions met:")
-                logger.critical(f"[REDEPLOY] - Time since first error: {time_since_first_error}")
-                logger.critical(f"[REDEPLOY] - Total HTTP errors: {total_errors} (403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count})")
-                logger.critical(f"[REDEPLOY] - Initiating automatic redeploy...")
+                logger.critical(f"[REDEPLOY] ════════════════════════════════════════")
+                logger.critical(f"[REDEPLOY] ⚠️  NORMAL REDEPLOY CONDITIONS MET")
+                logger.critical(f"[REDEPLOY] - Time since first error: {time_since_first_error} (threshold: {self.redeploy_threshold_minutes}min)")
+                logger.critical(f"[REDEPLOY] - Total errors: {total_errors} (threshold: {self.max_http_errors})")
+                logger.critical(f"[REDEPLOY]   * 403 errors: {self.error_403_count}")
+                logger.critical(f"[REDEPLOY]   * 401 errors: {self.error_401_count}")
+                logger.critical(f"[REDEPLOY]   * 429 errors: {self.error_429_count}")
+                logger.critical(f"[REDEPLOY] - Success streak: {self.success_streak}")
+                logger.critical(f"[REDEPLOY] - Last redeploy: {self.last_redeploy_time}")
+                logger.critical(f"[REDEPLOY] ⚠️  Initiating automatic redeploy...")
+                logger.critical(f"[REDEPLOY] ════════════════════════════════════════")
                 
                 self._perform_redeploy()
             else:
                 time_since_last_redeploy = current_time - self.last_redeploy_time
-                logger.warning(f"[REDEPLOY] Redeploy needed but blocked by cooldown. Time since last: {time_since_last_redeploy}")
-                logger.warning(f"[REDEPLOY] Current errors: {total_errors} (403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count})")
+                logger.warning(f"[REDEPLOY] ⏸️  Redeploy needed but blocked by cooldown")
+                logger.warning(f"[REDEPLOY] - Time since last redeploy: {time_since_last_redeploy} (need {self.min_redeploy_interval_minutes}min)")
+                logger.warning(f"[REDEPLOY] - Current errors: {total_errors} (403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count})")
     
     def _perform_redeploy(self):
         """Выполнить редеплой через Railway API"""
         try:
+            logger.info("[REDEPLOY] 🔄 _perform_redeploy() called")
+            logger.info(f"[REDEPLOY] Checking Railway API token...")
+            
             if not self.api_token:
-                logger.error("[REDEPLOY] Railway API token not found. Cannot perform redeploy.")
+                logger.error("[REDEPLOY] ❌ Railway API token not found in environment")
+                logger.info("[REDEPLOY] Falling back to alternative redeploy methods...")
                 self._fallback_redeploy()
                 return
             
@@ -410,12 +447,17 @@ class RailwayRedeployManager:
     def _emergency_redeploy(self):
         """Экстренный метод редеплоя через webhook или прямой триггер"""
         try:
-            logger.critical("[REDEPLOY] Using emergency redeploy method")
+            logger.critical("[REDEPLOY] ════════════════════════════════════════")
+            logger.critical("[REDEPLOY] 🚨 EMERGENCY REDEPLOY METHOD ACTIVATED")
+            logger.critical("[REDEPLOY] Reason: Railway API and CLI methods failed")
+            logger.critical("[REDEPLOY] ════════════════════════════════════════")
             
             # Обновляем время редеплоя
             self.last_redeploy_time = datetime.now(timezone(timedelta(hours=3)))
+            logger.info(f"[REDEPLOY] Recording redeploy time: {self.last_redeploy_time}")
             self._save_last_redeploy_time(self.last_redeploy_time)
             self._reset_error_tracking()
+            logger.info("[REDEPLOY] Error tracking reset")
             
             # Метод 1: Пробуем через Railway webhook (если настроен)
             webhook_url = os.getenv('RAILWAY_REDEPLOY_WEBHOOK')
@@ -431,18 +473,23 @@ class RailwayRedeployManager:
             
             # Метод 2: Записываем маркер и делаем принудительный выход
             # Railway автоматически перезапустит упавший сервис
-            logger.critical("[REDEPLOY] Forcing application crash for Railway auto-restart")
+            logger.critical("[REDEPLOY] ════════════════════════════════════════")
+            logger.critical("[REDEPLOY] 💥 METHOD 2: Forcing application crash")
+            logger.critical("[REDEPLOY] Note: Railway should auto-restart the service")
+            logger.critical("[REDEPLOY] If bot doesn't restart - manual action required!")
+            logger.critical("[REDEPLOY] ════════════════════════════════════════")
             
             try:
                 with open('/tmp/redeploy_requested', 'w') as f:
                     f.write(str(self.last_redeploy_time))
-                logger.info("[REDEPLOY] Created redeploy marker file")
-            except:
-                pass
+                logger.info("[REDEPLOY] ✅ Created redeploy marker file: /tmp/redeploy_requested")
+            except Exception as e:
+                logger.warning(f"[REDEPLOY] ⚠️  Failed to create marker file: {e}")
             
             # Немедленный выход с ошибкой - Railway перезапустит
             import signal
-            logger.critical("[REDEPLOY] Sending SIGTERM to self...")
+            logger.critical("[REDEPLOY] 📤 Sending SIGTERM signal to own process...")
+            logger.critical(f"[REDEPLOY] Process ID: {os.getpid()}")
             os.kill(os.getpid(), signal.SIGTERM)
             
             # Если SIGTERM не сработал, через 2 секунды делаем hard exit
