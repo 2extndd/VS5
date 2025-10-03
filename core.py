@@ -2,6 +2,8 @@ import db, configuration_values, requests
 from pyVintedVN import Vinted, requester
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from logger import get_logger
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -237,72 +239,106 @@ def get_user_country(profile_id):
     return user_country
 
 
-def process_items(queue):
+def continuous_query_worker(query, queue, refresh_delay, items_per_query):
     """
-    Process all queries from the database, search for items, and put them in the queue.
-    Uses the global items_queue by default, but can accept a custom queue for backward compatibility.
-
+    Continuous worker that processes a SINGLE query independently.
+    Each query has its own worker running in a separate thread.
+    
+    This implements TRUE parallel processing:
+    - Query #1: scans every 15 sec independently
+    - Query #2: scans every 15 sec independently  
+    - Query #N: scans every 15 sec independently
+    
     Args:
-        queue (Queue, optional): The queue to put the items in. Defaults to the global items_queue.
+        query: Single query tuple from database
+        queue: Queue to put the items in
+        refresh_delay: Delay in seconds between scans for THIS query
+        items_per_query: Number of items to fetch per query
+    """
+    query_id = query[0]
+    query_url = query[1]
+    
+    logger.info(f"[WORKER #{query_id}] 🚀 Started - will scan every {refresh_delay}s")
+    
+    while True:
+        start_time = time.time()
+        
+        try:
+            # Initialize Vinted for this thread
+            vinted = Vinted()
+            
+            # Scan this query
+            all_items = vinted.items.search(query_url, nbr_items=items_per_query)
+            
+            elapsed = time.time() - start_time
+            
+            # Put items into queue
+            if all_items:
+                queue.put((all_items, query_id))
+                logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items in {elapsed:.2f}s")
+            else:
+                logger.info(f"[WORKER #{query_id}] 📭 No new items ({elapsed:.2f}s)")
+                
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"[WORKER #{query_id}] ❌ Error after {elapsed:.2f}s: {e}")
+        
+        # Sleep for refresh_delay seconds before next scan
+        time.sleep(refresh_delay)
 
-    Returns:
-        None
+
+def start_continuous_workers(queue):
+    """
+    Start independent continuous workers for EACH query.
+    
+    Architecture:
+    - 72 queries = 72 independent threads
+    - Each thread scans its own query every 15 seconds
+    - All threads run in parallel forever
+    - Query Refresh Delay applies to EACH query independently
+    
+    This is the TRUE parallel query processing!
     """
     try:
-        logger.info(f"[DEBUG] process_items called - starting execution")
-        
-        # Get database statistics for debugging
-        db_stats = db.get_database_stats()
-        logger.info(f"[DEBUG] Database statistics: {db_stats}")
+        logger.info(f"[WORKERS] 🚀 Starting INDEPENDENT workers for each query...")
         
         all_queries = db.get_queries()
-        logger.info(f"[DEBUG] Got {len(all_queries)} queries from database")
-
-        # Initialize Vinted
-        vinted = Vinted()
+        logger.info(f"[WORKERS] Got {len(all_queries)} queries - creating {len(all_queries)} independent workers")
         
-        # Enable debug mode for troubleshooting
-        from pyVintedVN.requester import requester
-        requester.debug = True
-        logger.info("Enabled debug mode for Vinted requests")
-
-        # Get the number of items per query from the database
-        items_per_query_param = db.get_parameter("items_per_query")
-        items_per_query = int(items_per_query_param) if items_per_query_param else 20
-
-        # for each keyword we parse data
+        # Get configuration
+        refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
+        items_per_query = int(db.get_parameter("items_per_query") or 20)
+        
+        logger.info(f"[WORKERS] Configuration: {refresh_delay}s delay, {items_per_query} items per query")
+        logger.info(f"[WORKERS] Each query will be scanned every {refresh_delay} seconds INDEPENDENTLY")
+        
+        # Start a continuous worker for each query
+        # Using ThreadPoolExecutor to manage all threads
+        executor = ThreadPoolExecutor(max_workers=len(all_queries))
+        
         for query in all_queries:
-            logger.info(f"[DEBUG] Calling vinted.items.search for query: {query[1]}")
-            logger.info(f"[DEBUG] vinted.items type: {type(vinted.items)}")
-            logger.info(f"[DEBUG] vinted.items.search method: {vinted.items.search}")
-            all_items = vinted.items.search(query[1], nbr_items=items_per_query)
-            
-            # Debug: log info about found items
-            logger.info(f"[DEBUG] *** CORE.PY *** Found {len(all_items)} total items for query")
-            logger.info(f"[DEBUG] all_items type: {type(all_items)}")
-            if all_items:
-                first_item = all_items[0]
-                logger.info(f"[DEBUG] First item type: {type(first_item)}")
-                logger.info(f"[DEBUG] First item: {first_item}")
-                try:
-                    logger.info(f"[DEBUG] First item age: {(first_item.created_at_ts).isoformat()}")
-                    logger.info(f"[DEBUG] Item is_new_item(60): {first_item.is_new_item(60)}")
-                except Exception as e:
-                    logger.info(f"[DEBUG] Error accessing item attributes: {e}")
-            else:
-                logger.info(f"[DEBUG] *** NO ITEMS RETURNED FROM SEARCH ***")
-            
-            # TEMPORARILY DISABLE TIME FILTER - accept all items but check for duplicates
-            data = all_items  # Accept all items for now
-            logger.info(f"[DEBUG] Putting {len(data)} items into queue for query_id {query[0]} (queue id: {id(queue)})")
-            queue.put((data, query[0]))
-            logger.info(f"[DEBUG] Successfully put items into queue (queue id: {id(queue)})")
-            logger.info(f"Scraped {len(data)} items for query: {query[1]}")
-            
+            executor.submit(continuous_query_worker, query, queue, refresh_delay, items_per_query)
+        
+        logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers started!")
+        logger.info(f"[WORKERS] 🔥 All queries now scan every {refresh_delay}s in PARALLEL!")
+        
+        # Keep executor alive
+        return executor
+        
     except Exception as e:
-        logger.error(f"[CRITICAL ERROR] process_items failed: {e}")
+        logger.error(f"[WORKERS] CRITICAL ERROR starting workers: {e}")
         import traceback
-        logger.error(f"[CRITICAL ERROR] Traceback: {traceback.format_exc()}")
+        logger.error(f"[WORKERS] Traceback: {traceback.format_exc()}")
+        return None
+
+
+def process_items(queue):
+    """
+    DEPRECATED: This function is no longer used with continuous workers.
+    Keeping for backward compatibility.
+    """
+    logger.warning("[DEPRECATED] process_items() called - this should not happen with continuous workers!")
+    pass
 
 
 def clear_item_queue(items_queue, new_items_queue):

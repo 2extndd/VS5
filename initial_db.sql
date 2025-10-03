@@ -65,10 +65,10 @@ VALUES ('telegram_enabled', 'False'),
        ('version', '1.35'),
        ('github_url', 'https://github.com/Fuyucch1/Vinted-Notifications'),
 
-       ('items_per_query', '20'),
-       ('query_refresh_delay', '60'),
+      ('items_per_query', '20'),
+      ('query_refresh_delay', '60'),
 
-       ('proxy_list', ''),
+      ('proxy_list', ''),
        ('proxy_list_link', ''),
        ('check_proxies', 'False'),
        ('last_proxy_check_time', '0'),

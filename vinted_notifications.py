@@ -231,16 +231,17 @@ if __name__ == "__main__":
     
     # Get refresh delay from Web UI configuration
     query_refresh_delay_param = db.get_parameter("query_refresh_delay")
-    current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 60
+    current_query_refresh_delay = int(query_refresh_delay_param) if query_refresh_delay_param else 15
     logger.info(f"[DEBUG] Query refresh delay from Web UI: {current_query_refresh_delay} seconds")
     
-    # Start scraper scheduler in the main process
-    logger.info("[DEBUG] Starting scraper scheduler...")
-    scraper_scheduler = BackgroundScheduler()
-    scraper_scheduler.add_job(core.process_items, 'interval', seconds=current_query_refresh_delay, 
-                             args=[items_queue], name="scraper")
-    scraper_scheduler.start()
-    logger.info(f"[DEBUG] Scraper scheduler started with {current_query_refresh_delay} sec interval!")
+    # Start INDEPENDENT continuous workers for each query (NO SCHEDULER!)
+    logger.info("[DEBUG] Starting INDEPENDENT workers for each query...")
+    logger.info(f"[DEBUG] Each query will scan every {current_query_refresh_delay} seconds in PARALLEL")
+    workers_executor = core.start_continuous_workers(items_queue)
+    if workers_executor:
+        logger.info(f"[DEBUG] ✅ Independent workers started successfully!")
+    else:
+        logger.error(f"[DEBUG] ❌ Failed to start independent workers!")
     
     # Start item processor scheduler - THIS WAS MISSING!
     logger.info("[DEBUG] Starting item processor scheduler...")
@@ -282,8 +283,8 @@ if __name__ == "__main__":
     
     try:
         # Start schedulers in threads before starting Flask
-        logger.info("[DEBUG] All schedulers started, now starting Flask server...")
-        logger.info(f"[DEBUG] Scraper scheduler running: {scraper_scheduler.running}")
+        logger.info("[DEBUG] All systems started, now starting Flask server...")
+        logger.info(f"[DEBUG] Independent workers: {workers_executor is not None}")
         logger.info(f"[DEBUG] Processor scheduler running: {processor_scheduler.running}")
         logger.info(f"[DEBUG] Monitor scheduler running: {monitor_scheduler.running}")
         
@@ -291,7 +292,8 @@ if __name__ == "__main__":
         app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
     except KeyboardInterrupt:
         logger.info("Main process interrupted")
-        scraper_scheduler.shutdown()
+        if workers_executor:
+            workers_executor.shutdown(wait=False)
         processor_scheduler.shutdown()
         monitor_scheduler.shutdown()
-        logger.info("All schedulers stopped")
+        logger.info("All systems stopped")
