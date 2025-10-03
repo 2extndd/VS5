@@ -159,10 +159,30 @@ class requester:
         """Переключение на новый прокси при проблемах с текущим"""
         try:
             import proxies
+            
+            # Получаем текущий прокси для исключения из выбора
+            current_proxy_url = self.session.proxies.get('http', '')
+            # Извлекаем прокси строку из URL (format: http://user:pass@ip:port)
+            if current_proxy_url and '@' in current_proxy_url:
+                # Извлекаем ip:port:user:pass из http://user:pass@ip:port
+                parts = current_proxy_url.replace('http://', '').split('@')
+                if len(parts) == 2:
+                    userpass = parts[0].split(':')
+                    ipport = parts[1].split(':')
+                    if len(userpass) == 2 and len(ipport) == 2:
+                        current_proxy_str = f"http://{userpass[0]}:{userpass[1]}@{ipport[0]}:{ipport[1]}"
+                        logger.info(f"[PROXY] Excluding current proxy from rotation: {ipport[0]}:{ipport[1]}")
+                    else:
+                        current_proxy_str = None
+                else:
+                    current_proxy_str = None
+            else:
+                current_proxy_str = None
+            
             logger.info(f"[PROXY] Rotating to new proxy due to connection issues...")
             
-            # Получаем новый прокси (принудительно, без кэша)
-            new_proxy = proxies.get_fresh_proxy()
+            # Получаем новый прокси, ИСКЛЮЧАЯ текущий "плохой"
+            new_proxy = proxies.get_fresh_proxy(exclude_proxy=current_proxy_str)
             if new_proxy:
                 # Очищаем старые настройки прокси
                 self.session.proxies.clear()
