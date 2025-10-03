@@ -7,6 +7,36 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 
+def calculate_delay(published_timestamp, found_timestamp):
+    """Calculate delay between item publication and bot discovery"""
+    try:
+        if not published_timestamp or not found_timestamp:
+            return None
+        
+        published = float(published_timestamp)
+        found = float(found_timestamp)
+        delay_seconds = found - published
+        
+        # Don't show negative delays (clock skew issues)
+        if delay_seconds < 0:
+            return None
+        
+        # Format delay as human-readable text
+        if delay_seconds < 60:
+            return f"+{int(delay_seconds)} сек"
+        elif delay_seconds < 3600:
+            minutes = int(delay_seconds / 60)
+            return f"+{minutes} мин"
+        elif delay_seconds < 86400:
+            hours = int(delay_seconds / 3600)
+            return f"+{hours} час" if hours == 1 else f"+{hours} часа" if hours < 5 else f"+{hours} часов"
+        else:
+            days = int(delay_seconds / 86400)
+            return f"+{days} день" if days == 1 else f"+{days} дня" if days < 5 else f"+{days} дней"
+    except (ValueError, TypeError, OSError):
+        return None
+
+
 def process_query(query, name=None, thread_id=None):
     """
     Process a Vinted query URL by:
@@ -284,13 +314,23 @@ def clear_item_queue(items_queue, new_items_queue):
             if True:  # Accept all items for now
                 logger.info(f"[DEBUG] Creating message for item {item.id}...")
                 try:
+                    # Calculate delay between publication and discovery
+                    import time
+                    found_at = time.time()  # Record when bot found this item
+                    delay_str = calculate_delay(item.raw_timestamp, found_at)
+                    
+                    # Format price with delay
+                    price_text = f"💶{str(item.price)} {item.currency}"
+                    if delay_str:
+                        price_text += f" ({delay_str})"
+                    
                     # We create the message with conditional size display
                     if item.size_title and item.size_title.strip():
                         # Format message with size
-                        content = f"<b>{item.title}</b>\n<b>💶{str(item.price)} {item.currency}</b>\n⛓️ {item.size_title}\n{item.brand_title}"
+                        content = f"<b>{item.title}</b>\n<b>{price_text}</b>\n⛓️ {item.size_title}\n{item.brand_title}"
                     else:
                         # Format message without size line
-                        content = f"<b>{item.title}</b>\n<b>💶{str(item.price)} {item.currency}</b>\n{item.brand_title}"
+                        content = f"<b>{item.title}</b>\n<b>{price_text}</b>\n{item.brand_title}"
                     
                     # Add invisible image link if photo exists
                     if item.photo:
@@ -312,10 +352,8 @@ def clear_item_queue(items_queue, new_items_queue):
                     new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id, item.photo))
                     logger.info(f"[DEBUG] Item added to new_items_queue successfully")
                     
-                    # Add the item to the db
+                    # Add the item to the db (found_at already calculated above for delay)
                     logger.info(f"[DEBUG] Adding item to database: {item.id}")
-                    import time
-                    found_at = time.time()  # Record when bot found this item
                     db.add_item_to_db(id=item.id, title=item.title, query_id=query_id, price=item.price, 
                                       timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency, 
                                       brand_title=item.brand_title, found_at=found_at)
