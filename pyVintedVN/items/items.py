@@ -26,22 +26,6 @@ class Items:
         >>> items = Items()
         >>> results = items.search("https://www.vinted.fr/catalog?search_text=shoes")
     """
-    
-    def __init__(self, requester=None):
-        """
-        Initialize Items with a dedicated requester instance.
-        
-        Args:
-            requester: Dedicated requester instance (if None, uses global singleton)
-        """
-        if requester is not None:
-            self.requester = requester
-            logger.info("[ITEMS] Using dedicated requester instance (independent proxy)")
-        else:
-            # Fallback to global singleton for backward compatibility
-            from pyVintedVN.requester import requester as requester_instance
-            self.requester = requester_instance
-            logger.info("[ITEMS] Using global requester instance (shared)")
 
     def search(self, url: str, nbr_items: int = 20, page: int = 1,
                time: Optional[int] = None, json: bool = False) -> List[Item]:
@@ -65,8 +49,10 @@ class Items:
         # Extract the domain from the URL and set the locale
         locale = urlparse(url).netloc
         
-        # Use THIS instance's dedicated requester (not global!)
-        self.requester.set_locale(locale)
+        # Use global requester instance (with random proxy rotation)
+        from pyVintedVN.requester import requester as requester_instance
+        
+        requester_instance.set_locale(locale)
 
         # Parse the URL to get the API parameters
         params = self.parse_url(url, nbr_items, page, time)
@@ -75,8 +61,8 @@ class Items:
         api_url = f"https://{locale}{Urls.VINTED_API_URL}/{Urls.VINTED_PRODUCTS_ENDPOINT}"
 
         try:
-            # Make the request using THIS instance's dedicated requester
-            response = self.requester.get(url=api_url, params=params)
+            # Make the request using global requester (random proxy on each request)
+            response = requester_instance.get(url=api_url, params=params)
             response.raise_for_status()
 
             # Parse the response
