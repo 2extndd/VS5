@@ -16,7 +16,8 @@ _PROXY_CACHE_INITIALIZED = False
 _SINGLE_PROXY = None
 
 # URL to test proxies against
-_TEST_URL = "https://www.vinted.fr/"
+# Using google.com instead of vinted.fr to avoid HEAD request blocks
+_TEST_URL = "https://www.google.com/"
 _TEST_TIMEOUT = 10  # seconds (increased from 2 to avoid false negatives)
 # Maximum number of concurrent workers for proxy checking
 MAX_PROXY_WORKERS = 10
@@ -253,13 +254,13 @@ def check_proxy(proxy: str) -> bool:
 
         # Make a HEAD request to the test URL with the proxy
         start_time = time.time()
-        response = session.head(_TEST_URL, proxies=proxy_dict, timeout=_TEST_TIMEOUT)
+        response = session.head(_TEST_URL, proxies=proxy_dict, timeout=_TEST_TIMEOUT, allow_redirects=True)
         response_time = round((time.time() - start_time) * 1000, 2)
 
-        # Check if the request was successful
-        is_working = response.status_code == 200
+        # Check if the request was successful (accept 2xx and 3xx codes)
+        is_working = 200 <= response.status_code < 400
         if is_working:
-            logger.info(f"[PROXY] ✅ {proxy_display} - OK ({response_time}ms)")
+            logger.info(f"[PROXY] ✅ {proxy_display} - OK (HTTP {response.status_code}, {response_time}ms)")
         else:
             logger.warning(f"[PROXY] ❌ {proxy_display} - HTTP {response.status_code}")
         return is_working
