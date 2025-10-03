@@ -239,31 +239,36 @@ def get_user_country(profile_id):
     return user_country
 
 
-def continuous_query_worker(query, queue, refresh_delay, items_per_query):
+def continuous_query_worker(query, queue):
     """
     Continuous worker that processes a SINGLE query independently.
     Each query has its own worker running in a separate thread.
     
     This implements TRUE parallel processing:
-    - Query #1: scans every 15 sec independently
-    - Query #2: scans every 15 sec independently  
-    - Query #N: scans every 15 sec independently
+    - Query #1: scans every X sec independently
+    - Query #2: scans every X sec independently  
+    - Query #N: scans every X sec independently
+    
+    Refresh delay is read from DB DYNAMICALLY on each cycle,
+    so changes in Web UI apply immediately without restart!
     
     Args:
         query: Single query tuple from database
         queue: Queue to put the items in
-        refresh_delay: Delay in seconds between scans for THIS query
-        items_per_query: Number of items to fetch per query
     """
     query_id = query[0]
     query_url = query[1]
     
-    logger.info(f"[WORKER #{query_id}] 🚀 Started - will scan every {refresh_delay}s")
+    logger.info(f"[WORKER #{query_id}] 🚀 Started - reading delay from DB dynamically")
     
     while True:
         start_time = time.time()
         
         try:
+            # Read FRESH configuration from DB on each cycle (dynamic!)
+            refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
+            items_per_query = int(db.get_parameter("items_per_query") or 20)
+            
             # Initialize Vinted for this thread
             vinted = Vinted()
             
@@ -275,15 +280,17 @@ def continuous_query_worker(query, queue, refresh_delay, items_per_query):
             # Put items into queue
             if all_items:
                 queue.put((all_items, query_id))
-                logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items in {elapsed:.2f}s")
+                logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items in {elapsed:.2f}s (next scan in {refresh_delay}s)")
             else:
-                logger.info(f"[WORKER #{query_id}] 📭 No new items ({elapsed:.2f}s)")
+                logger.info(f"[WORKER #{query_id}] 📭 No new items ({elapsed:.2f}s, next scan in {refresh_delay}s)")
                 
         except Exception as e:
             elapsed = time.time() - start_time
+            # Still need to get refresh_delay for sleep
+            refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
             logger.error(f"[WORKER #{query_id}] ❌ Error after {elapsed:.2f}s: {e}")
         
-        # Sleep for refresh_delay seconds before next scan
+        # Sleep for CURRENT refresh_delay (dynamically updated from DB!)
         time.sleep(refresh_delay)
 
 
@@ -293,9 +300,10 @@ def start_continuous_workers(queue):
     
     Architecture:
     - 72 queries = 72 independent threads
-    - Each thread scans its own query every 15 seconds
+    - Each thread scans its own query dynamically (reads delay from DB)
     - All threads run in parallel forever
     - Query Refresh Delay applies to EACH query independently
+    - Changes in Web UI apply IMMEDIATELY (no restart needed!)
     
     This is the TRUE parallel query processing!
     """
@@ -305,22 +313,24 @@ def start_continuous_workers(queue):
         all_queries = db.get_queries()
         logger.info(f"[WORKERS] Got {len(all_queries)} queries - creating {len(all_queries)} independent workers")
         
-        # Get configuration
+        # Get INITIAL configuration (for logging only)
         refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
         items_per_query = int(db.get_parameter("items_per_query") or 20)
         
-        logger.info(f"[WORKERS] Configuration: {refresh_delay}s delay, {items_per_query} items per query")
-        logger.info(f"[WORKERS] Each query will be scanned every {refresh_delay} seconds INDEPENDENTLY")
+        logger.info(f"[WORKERS] Initial config: {refresh_delay}s delay, {items_per_query} items per query")
+        logger.info(f"[WORKERS] Workers will read FRESH config from DB on each cycle (dynamic!)")
+        logger.info(f"[WORKERS] Changes in Web UI will apply IMMEDIATELY without restart! 🔥")
         
         # Start a continuous worker for each query
         # Using ThreadPoolExecutor to manage all threads
+        # Workers read config from DB dynamically, so no need to pass parameters!
         executor = ThreadPoolExecutor(max_workers=len(all_queries))
         
         for query in all_queries:
-            executor.submit(continuous_query_worker, query, queue, refresh_delay, items_per_query)
+            executor.submit(continuous_query_worker, query, queue)
         
         logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers started!")
-        logger.info(f"[WORKERS] 🔥 All queries now scan every {refresh_delay}s in PARALLEL!")
+        logger.info(f"[WORKERS] 🔥 All queries scan in TRUE PARALLEL with DYNAMIC config!")
         
         # Keep executor alive
         return executor
