@@ -1276,30 +1276,35 @@ def set_thread_ids():
 
 @app.route('/force_scan_all', methods=['POST'])
 def force_scan_all():
-    """Force scan all queries immediately"""
+    """
+    Force scan all queries immediately by temporarily setting query_refresh_delay to 0.
+    
+    With continuous workers architecture:
+    - Workers read config dynamically from DB
+    - Setting delay to 0 triggers immediate scans
+    - After 5 seconds, restore original delay
+    """
     try:
-        import threading
-        from core import process_items
-        import queue
-        
-        # Create queues for the scan
-        items_queue = queue.Queue()
-        new_items_queue = queue.Queue()
-        
         logger.info("🚀 ПРИНУДИТЕЛЬНОЕ СКАНИРОВАНИЕ ВСЕХ ФИЛЬТРОВ ЗАПУЩЕНО!")
         
-        # Run process_items in a thread to avoid blocking the web request
-        def scan_thread():
-            try:
-                logger.info("Starting forced scan of all queries...")
-                process_items(items_queue)
-                logger.info("Forced scan completed!")
-            except Exception as e:
-                logger.error(f"Error in forced scan: {e}")
+        # Get current delay
+        current_delay = db.get_parameter("query_refresh_delay") or "15"
+        logger.info(f"[FORCE SCAN] Current delay: {current_delay}s")
         
-        # Start scan in background thread
-        scan_thread_obj = threading.Thread(target=scan_thread, daemon=True)
-        scan_thread_obj.start()
+        # Set delay to 1 second to trigger immediate scans in all workers
+        db.set_parameter("query_refresh_delay", "1")
+        logger.info(f"[FORCE SCAN] Delay set to 1s - all workers will scan immediately!")
+        
+        # Schedule restoration of original delay after 5 seconds
+        import threading
+        def restore_delay():
+            import time
+            time.sleep(5)
+            db.set_parameter("query_refresh_delay", current_delay)
+            logger.info(f"[FORCE SCAN] Delay restored to {current_delay}s")
+        
+        restore_thread = threading.Thread(target=restore_delay, daemon=True)
+        restore_thread.start()
         
         # Get current stats for response
         queries = db.get_queries()
@@ -1307,9 +1312,10 @@ def force_scan_all():
         
         return jsonify({
             'status': 'success',
-            'message': f'Force scan started for {query_count} queries',
+            'message': f'Force scan triggered for {query_count} queries! All workers will scan within 1 second.',
             'queries_scanned': query_count,
-            'note': 'Scan is running in background. Check dashboard in a few moments for updated results.'
+            'note': f'Delay temporarily set to 1s, will restore to {current_delay}s in 5 seconds.',
+            'current_delay': current_delay
         })
         
     except Exception as e:
