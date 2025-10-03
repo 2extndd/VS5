@@ -239,7 +239,7 @@ def get_user_country(profile_id):
     return user_country
 
 
-def continuous_query_worker(query, queue):
+def continuous_query_worker(query, queue, start_delay=0):
     """
     Continuous worker that processes a SINGLE query independently.
     Each query has its own worker running in a separate thread.
@@ -255,16 +255,21 @@ def continuous_query_worker(query, queue):
     Args:
         query: Single query tuple from database
         queue: Queue to put the items in
+        start_delay: Random delay before starting (to avoid simultaneous token requests)
     """
     query_id = query[0]
     query_url = query[1]
     
+    # Add random delay to avoid all workers starting simultaneously (403 ban!)
+    if start_delay > 0:
+        logger.info(f"[WORKER #{query_id}] Waiting {start_delay:.1f}s before start (anti-ban)")
+        time.sleep(start_delay)
+    
     logger.info(f"[WORKER #{query_id}] 🚀 Started - reading delay from DB dynamically")
     
-    # Create a DEDICATED Vinted instance for THIS worker (not shared!)
-    # This ensures each worker has its own requester with independent proxy
+    # Create Vinted instance for THIS worker
     vinted = Vinted()
-    logger.info(f"[WORKER #{query_id}] Created dedicated Vinted instance with independent requester")
+    logger.info(f"[WORKER #{query_id}] Created Vinted instance")
     
     while True:
         start_time = time.time()
@@ -325,14 +330,23 @@ def start_continuous_workers(queue):
         
         # Start a continuous worker for each query
         # Using ThreadPoolExecutor to manage all threads
-        # Workers read config from DB dynamically, so no need to pass parameters!
+        # Add staggered start delays to avoid simultaneous token requests (anti-ban!)
         executor = ThreadPoolExecutor(max_workers=len(all_queries))
         
-        for query in all_queries:
-            executor.submit(continuous_query_worker, query, queue)
+        import random
+        num_queries = len(all_queries)
         
-        logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers started!")
-        logger.info(f"[WORKERS] 🔥 All queries scan in TRUE PARALLEL with DYNAMIC config!")
+        # Stagger workers: spread 72 workers over 60 seconds (72 / 60 = 1.2 workers/sec)
+        # This avoids triggering rate limits
+        for idx, query in enumerate(all_queries):
+            # Calculate delay: 0s for first, then spread evenly
+            start_delay = (idx * 60.0) / num_queries if num_queries > 1 else 0
+            executor.submit(continuous_query_worker, query, queue, start_delay)
+        
+        total_startup_time = 60 if num_queries > 1 else 0
+        logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers scheduled!")
+        logger.info(f"[WORKERS] ⏱️  Staggered start over {total_startup_time}s to avoid ban")
+        logger.info(f"[WORKERS] 🔥 All queries will scan in TRUE PARALLEL with DYNAMIC config!")
         
         # Keep executor alive
         return executor
