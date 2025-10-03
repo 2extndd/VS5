@@ -447,8 +447,19 @@ class RailwayRedeployManager:
     def _emergency_redeploy(self):
         """Экстренный метод редеплоя через webhook или прямой триггер"""
         try:
+            # КРИТИЧЕСКИ ВАЖНАЯ ИНФОРМАЦИЯ ПЕРЕД EMERGENCY
+            total_errors = self.error_403_count + self.error_401_count + self.error_429_count
+            
             logger.critical("[REDEPLOY] ════════════════════════════════════════")
             logger.critical("[REDEPLOY] 🚨 EMERGENCY REDEPLOY METHOD ACTIVATED")
+            logger.critical("[REDEPLOY] ════════════════════════════════════════")
+            logger.critical("[REDEPLOY] CURRENT ERROR STATE:")
+            logger.critical(f"[REDEPLOY] - 403 errors: {self.error_403_count}")
+            logger.critical(f"[REDEPLOY] - 401 errors: {self.error_401_count}")
+            logger.critical(f"[REDEPLOY] - 429 errors: {self.error_429_count}")
+            logger.critical(f"[REDEPLOY] - TOTAL: {total_errors}")
+            logger.critical(f"[REDEPLOY] - Success streak: {self.success_streak}")
+            logger.critical("[REDEPLOY] ════════════════════════════════════════")
             logger.critical("[REDEPLOY] Reason: Railway API and CLI methods failed")
             logger.critical("[REDEPLOY] ════════════════════════════════════════")
             
@@ -568,10 +579,16 @@ class RailwayRedeployManager:
             if first_error_time:
                 time_since_first = current_time - first_error_time
                 status["time_since_first_error_seconds"] = time_since_first.total_seconds()
-                status["redeploy_needed"] = (
+                
+                # Проверяем ОБА условия: обычное И критическое
+                normal_condition = (
                     time_since_first.total_seconds() >= self.redeploy_threshold_minutes * 60 and
                     total_errors >= self.max_http_errors
                 )
+                critical_condition = total_errors >= 100
+                
+                status["redeploy_needed"] = normal_condition or critical_condition
+                status["redeploy_reason"] = "critical" if critical_condition else ("normal" if normal_condition else "none")
             
             return status
 
