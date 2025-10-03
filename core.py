@@ -7,8 +7,18 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 
-def calculate_delay(published_timestamp, found_timestamp):
-    """Calculate delay between item publication and bot discovery"""
+def calculate_delay(published_timestamp, found_timestamp, max_hours=1):
+    """Calculate delay between item publication and bot discovery
+    
+    Args:
+        published_timestamp: When item was published (Unix timestamp)
+        found_timestamp: When bot found the item (Unix timestamp)
+        max_hours: Maximum hours to show (default 1). If delay > max_hours, returns None
+                   This filters out incorrect timestamps (e.g. photo timestamp vs publication)
+    
+    Returns:
+        Formatted delay string or None
+    """
     try:
         if not published_timestamp or not found_timestamp:
             return None
@@ -19,6 +29,10 @@ def calculate_delay(published_timestamp, found_timestamp):
         
         # Don't show negative delays (clock skew issues)
         if delay_seconds < 0:
+            return None
+        
+        # Don't show delays > max_hours (likely wrong timestamp - photo vs publication)
+        if delay_seconds > (max_hours * 3600):
             return None
         
         # Format delay as human-readable text
