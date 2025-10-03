@@ -351,20 +351,8 @@ def clear_item_queue(items_queue, new_items_queue):
                         content += f"\n<a href='{item.photo}'>&#8205;</a>"
                     logger.info(f"[DEBUG] Message created successfully for item {item.id}")
                     
-                    # Get thread_id for this query
-                    thread_id = None
-                    try:
-                        # Get query details to extract thread_id
-                        current_query = next((q for q in db.get_queries() if q[0] == query_id), None)
-                        if current_query and len(current_query) > 4:
-                            thread_id = current_query[4]  # thread_id is the 5th element (index 4)
-                    except Exception as e:
-                        logger.warning(f"Could not get thread_id for query {query_id}: {e}")
-                    
-                    # add the item to the queue with thread_id and photo_url
-                    logger.info(f"[DEBUG] Adding item to queue: {item.title} (thread_id: {thread_id}, photo: {item.photo})")
-                    new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id, item.photo))
-                    logger.info(f"[DEBUG] Item added to new_items_queue successfully")
+                    # IMPORTANT: Save to DB FIRST, then send to Telegram
+                    # This prevents items appearing in TG but not in Web UI if DB fails
                     
                     # Add the item to the db (found_at already calculated above for delay)
                     logger.info(f"[DEBUG] Adding item to database: {item.id}")
@@ -377,6 +365,21 @@ def clear_item_queue(items_queue, new_items_queue):
                     logger.info(f"[DEBUG] Updating last_found for query {query_id}")
                     db.update_query_last_found(query_id, item.raw_timestamp)
                     logger.info(f"[DEBUG] Query {query_id} last_found updated!")
+                    
+                    # Get thread_id for this query
+                    thread_id = None
+                    try:
+                        # Get query details to extract thread_id
+                        current_query = next((q for q in db.get_queries() if q[0] == query_id), None)
+                        if current_query and len(current_query) > 4:
+                            thread_id = current_query[4]  # thread_id is the 5th element (index 4)
+                    except Exception as e:
+                        logger.warning(f"Could not get thread_id for query {query_id}: {e}")
+                    
+                    # NOW add to Telegram queue (only after successful DB save)
+                    logger.info(f"[DEBUG] Adding item to Telegram queue: {item.title} (thread_id: {thread_id}, photo: {item.photo})")
+                    new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id, item.photo))
+                    logger.info(f"[DEBUG] Item added to new_items_queue successfully")
                     
                 except Exception as e:
                     logger.error(f"[ERROR] Failed to process item {item.id}: {e}")
