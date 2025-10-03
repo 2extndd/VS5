@@ -261,6 +261,11 @@ def continuous_query_worker(query, queue):
     
     logger.info(f"[WORKER #{query_id}] 🚀 Started - reading delay from DB dynamically")
     
+    # Create a DEDICATED Vinted instance for THIS worker (not shared!)
+    # This ensures each worker has its own requester with independent proxy
+    vinted = Vinted()
+    logger.info(f"[WORKER #{query_id}] Created dedicated Vinted instance with independent requester")
+    
     while True:
         start_time = time.time()
         
@@ -269,10 +274,7 @@ def continuous_query_worker(query, queue):
             refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
             items_per_query = int(db.get_parameter("items_per_query") or 20)
             
-            # Initialize Vinted for this thread
-            vinted = Vinted()
-            
-            # Scan this query
+            # Scan this query using THIS worker's dedicated Vinted instance
             all_items = vinted.items.search(query_url, nbr_items=items_per_query)
             
             elapsed = time.time() - start_time
