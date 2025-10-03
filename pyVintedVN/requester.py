@@ -115,7 +115,7 @@ class requester:
                     return True
                 else:
                     if self.debug or force_new:
-                        logger.info(f"[REQUESTER] ⚠️  No proxy available - using direct connection")
+                        logger.warning(f"[REQUESTER] ⚠️  No proxy available - will retry on next request")
                     return False
         except Exception as e:
             logger.error(f"[REQUESTER] ❌ Proxy configuration failed: {e}")
@@ -148,8 +148,8 @@ class requester:
                     logger.info(f"[PROXY] Random proxy set: {proxy_info}")
                 return True
             else:
-                # Нет доступных прокси - используем прямое соединение
-                self.session.proxies.clear()
+                # Нет новых прокси - СОХРАНЯЕМ текущий прокси, НЕ переходим на direct!
+                logger.warning(f"[PROXY] No new proxy available - keeping current proxy configuration")
                 return False
         except Exception as e:
             logger.error(f"[PROXY] Error setting random proxy: {e}")
@@ -176,9 +176,8 @@ class requester:
                     logger.warning(f"[PROXY] Failed to configure new proxy")
             else:
                 logger.warning(f"[PROXY] No alternative proxy available for rotation")
-                # Переходим на прямое соединение
-                self.session.proxies.clear()
-                logger.info(f"[PROXY] Switched to direct connection")
+                # СОХРАНЯЕМ текущий прокси, НЕ переходим на direct!
+                logger.info(f"[PROXY] Keeping current proxy configuration")
             
             return False
         except Exception as e:

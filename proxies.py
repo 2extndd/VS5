@@ -17,7 +17,7 @@ _SINGLE_PROXY = None
 
 # URL to test proxies against
 _TEST_URL = "https://www.vinted.fr/"
-_TEST_TIMEOUT = 2  # seconds
+_TEST_TIMEOUT = 10  # seconds (increased from 2 to avoid false negatives)
 # Maximum number of concurrent workers for proxy checking
 MAX_PROXY_WORKERS = 10
 # Time interval in seconds after which proxies should be rechecked (1 hour)
@@ -442,9 +442,9 @@ def configure_proxy(session: requests.Session, proxy: Optional[str] = None) -> b
     if proxy is None:
         proxy = get_random_proxy()
 
-    # If we still don't have a proxy, return False
+    # If we still don't have a proxy, return False (KEEP existing proxy, don't clear!)
     if proxy is None:
-        session.proxies.clear()
+        logger.warning("[PROXY] No proxy available - keeping current proxy configuration")
         return False
 
     # Handle string proxy
