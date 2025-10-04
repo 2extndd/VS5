@@ -2015,18 +2015,30 @@ def api_worker_stats():
     """API endpoint for worker statistics - shows which workers got items/errors"""
     try:
         import core
+        from datetime import datetime
+        
         worker_stats = core.get_worker_stats()
         
         # Convert datetime objects to strings for JSON
         for worker_id, stats in worker_stats.items():
+            # Check if last_success is datetime before calling strftime
             if stats['last_success']:
-                stats['last_success'] = stats['last_success'].strftime('%Y-%m-%d %H:%M:%S')
+                if isinstance(stats['last_success'], datetime):
+                    stats['last_success'] = stats['last_success'].strftime('%Y-%m-%d %H:%M:%S')
+                # else: already a string, keep as is
+            
+            # Check if last_error is datetime before calling strftime
             if stats['last_error']:
-                stats['last_error'] = stats['last_error'].strftime('%Y-%m-%d %H:%M:%S')
+                if isinstance(stats['last_error'], datetime):
+                    stats['last_error'] = stats['last_error'].strftime('%Y-%m-%d %H:%M:%S')
+                # else: already a string, keep as is
             
             # Convert recent_scans datetimes
             for scan in stats['recent_scans']:
-                scan['time'] = scan['time'].strftime('%H:%M:%S')
+                if 'time' in scan and scan['time']:
+                    if isinstance(scan['time'], datetime):
+                        scan['time'] = scan['time'].strftime('%H:%M:%S')
+                    # else: already a string, keep as is
         
         return jsonify({
             'status': 'success',
@@ -2034,6 +2046,8 @@ def api_worker_stats():
         })
     except Exception as e:
         logger.error(f"Error in api_worker_stats: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
 
