@@ -2056,7 +2056,7 @@ def web_ui_process():
     
     # Disable werkzeug HTTP request logs (too verbose)
     import logging
-    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
     
     # Use Railway's PORT environment variable if available, otherwise fallback to configured port
     port = int(os.environ.get('PORT', configuration_values.WEB_UI_PORT))
