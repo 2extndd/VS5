@@ -273,26 +273,35 @@ function updateWorkerStatus(workers) {
     
     // Calculate statistics
     const totalWorkers = Object.keys(workers).length;
-    const workersWithErrors = Object.values(workers).filter(w => w.total_errors > 0).length;
     const workersWithItems = Object.values(workers).filter(w => w.total_items > 0).length;
-    
-    // Group workers by status
+
+    // Group workers by RECENT status (last 3 cycles)
     const errorWorkers = [];
     const idleWorkers = [];
     const activeWorkers = [];
-    
+
     Object.entries(workers).forEach(([workerId, stats]) => {
         const recentScans = stats.recent_scans || [];
         const workerData = { id: workerId, ...stats };
-        
-        if (stats.total_errors > 0) {
-            errorWorkers.push(workerData);
-        } else if (recentScans.length === 0 || stats.total_scans === 0) {
+
+        if (recentScans.length === 0 || stats.total_scans === 0) {
+            // Worker hasn't scanned yet - idle
             idleWorkers.push(workerData);
         } else {
-            activeWorkers.push(workerData);
+            // Check if last 3 scans had errors
+            const hasRecentErrors = recentScans.some(scan => scan.status === 'error');
+
+            if (hasRecentErrors) {
+                // Worker had errors in recent scans
+                errorWorkers.push(workerData);
+            } else {
+                // Worker had no errors in recent scans
+                activeWorkers.push(workerData);
+            }
         }
     });
+
+    const workersWithRecentErrors = errorWorkers.length;
     
     // Build compact HTML with badges
     let html = `
@@ -304,12 +313,12 @@ function updateWorkerStatus(workers) {
             </div>
             <div class="col-md-3">
                 <div class="alert alert-success mb-0 py-2">
-                    <strong>${activeWorkers.length}</strong> Active
+                    <strong>${activeWorkers.length}</strong> Working OK
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="alert alert-danger mb-0 py-2">
-                    <strong>${errorWorkers.length}</strong> With Errors
+                    <strong>${workersWithRecentErrors}</strong> Recent Errors
                 </div>
             </div>
             <div class="col-md-3">
@@ -332,28 +341,37 @@ function updateWorkerStatus(workers) {
         let badgeClass = 'bg-success';
         let icon = '✅';
         let title = `Worker #${workerId}: OK`;
-        
+
         const recentScans = stats.recent_scans || [];
-        
-        if (stats.total_errors > 0) {
-            badgeClass = 'bg-danger';
-            icon = '❌';
-            title = `Worker #${workerId}: ${stats.total_errors} errors`;
-        } else if (recentScans.length === 0 || stats.total_scans === 0) {
+
+        if (recentScans.length === 0 || stats.total_scans === 0) {
+            // Worker hasn't scanned yet - idle
             badgeClass = 'bg-secondary';
             icon = '⏸️';
             title = `Worker #${workerId}: Idle (no scans yet)`;
-        } else if (recentScans.length > 0) {
-            const lastScan = recentScans[recentScans.length - 1];
-            if (lastScan.items > 0) {
-                icon = '✅';
-                title = `Worker #${workerId}: ${lastScan.items} items found`;
+        } else {
+            // Check if last 3 scans had errors
+            const hasRecentErrors = recentScans.some(scan => scan.status === 'error');
+
+            if (hasRecentErrors) {
+                // Worker had errors in recent scans
+                badgeClass = 'bg-danger';
+                icon = '❌';
+                const errorCount = recentScans.filter(scan => scan.status === 'error').length;
+                title = `Worker #${workerId}: ${errorCount} errors in last 3 scans`;
             } else {
-                icon = '📭';
-                title = `Worker #${workerId}: No items`;
+                // Worker had no errors in recent scans
+                const lastScan = recentScans[recentScans.length - 1];
+                if (lastScan.items > 0) {
+                    icon = '✅';
+                    title = `Worker #${workerId}: ${lastScan.items} items found`;
+                } else {
+                    icon = '📭';
+                    title = `Worker #${workerId}: No items`;
+                }
             }
         }
-        
+
         html += `<span class="badge ${badgeClass}" title="${title}" style="font-size: 11px; padding: 4px 6px;">${icon}${workerId}</span>`;
     });
     
@@ -368,7 +386,7 @@ function updateWorkerStatus(workers) {
                     <h2 class="accordion-header">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#errorWorkersDetails">
                             <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
-                            Workers with Errors (${errorWorkers.length}) - Click to expand
+                            Workers with Recent Errors (${workersWithRecentErrors}) - Click to expand
                         </button>
                     </h2>
                     <div id="errorWorkersDetails" class="accordion-collapse collapse">
