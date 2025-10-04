@@ -42,7 +42,7 @@ class Items:
         self.session = session
 
     def search(self, url: str, nbr_items: int = 20, page: int = 1,
-               time: Optional[int] = None, json: bool = False) -> List[Item]:
+               time: Optional[int] = None, json: bool = False):
         """
         Retrieve items from a given search URL on Vinted.
 
@@ -51,14 +51,11 @@ class Items:
             nbr_items (int, optional): Number of items to be returned. Defaults to 20.
             page (int, optional): Page number to be returned. Defaults to 1.
             time (int, optional): Timestamp to filter items by time. Defaults to None. Looks like it doesn't work though.
-            json (bool, optional): Whether to return raw JSON data instead of Item objects. 
+            json (bool, optional): Whether to return raw JSON data instead of Item objects.
                 Defaults to False.
 
         Returns:
-            List[Item]: A list of Item objects.
-
-        Raises:
-            HTTPError: If the request to the Vinted API fails.
+            List[Item] or tuple: A list of Item objects, or (response, status_code) tuple for HTTP errors.
         """
         # Extract the domain from the URL and set the locale
         locale = urlparse(url).netloc
@@ -85,6 +82,7 @@ class Items:
 
         try:
             # Make the request using dedicated session or global requester
+            response = None
             if self.session:
                 # Using dedicated session from token pool
                 # Need to configure proxy for this request
@@ -94,10 +92,10 @@ class Items:
                 if proxy_dict:
                     converted_proxy = proxies.convert_proxy_string_to_dict(proxy_dict)
                     self.session.proxies.update(converted_proxy)
-                
+
                 # Make the request with dedicated session
                 response = self.session.get(url=api_url, params=params, timeout=30, allow_redirects=True)
-                
+
                 # Increment API request counter
                 try:
                     import db
@@ -108,7 +106,13 @@ class Items:
                 # Legacy mode: use global requester
                 from pyVintedVN.requester import requester as requester_instance
                 response = requester_instance.get(url=api_url, params=params)
-            
+
+            # Check for HTTP errors before raising
+            if response.status_code in (401, 403, 429):
+                # Don't raise_for_status here - let caller handle it
+                # But return the response and status code for error reporting
+                return response, response.status_code
+
             response.raise_for_status()
 
             # Parse the response

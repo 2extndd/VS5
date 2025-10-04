@@ -330,38 +330,75 @@ def continuous_query_worker(query, queue, start_delay=0):
             # Read FRESH configuration from DB on each cycle (dynamic!)
             refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
             items_per_query = int(db.get_parameter("items_per_query") or 20)
-            
+
             # Scan this query using THIS worker's dedicated Vinted instance
-            all_items = vinted.items.search(query_url, nbr_items=items_per_query)
-            
+            search_result = vinted.items.search(query_url, nbr_items=items_per_query)
+
             elapsed = time.time() - start_time
-            
-            # Report successful request to token pool
-            token_pool.report_success(token_session)
-            
-            # Put items into queue
-            if all_items:
-                queue.put((all_items, query_id))
-                logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items in {elapsed:.2f}s (next scan in {refresh_delay}s)")
-                # Update worker stats
-                update_worker_stats(query_id, 'success', len(all_items))
+
+            # Check if we got an error response (tuple) or successful items (list)
+            if isinstance(search_result, tuple) and len(search_result) == 2:
+                response, status_code = search_result
+
+                # Report HTTP error to redeploy system
+                from railway_redeploy import report_403_error, report_401_error, report_429_error
+
+                if status_code == 403:
+                    report_403_error()
+                    logger.warning(f"[WORKER #{query_id}] 403 error reported to redeploy system")
+                elif status_code == 401:
+                    report_401_error()
+                    logger.warning(f"[WORKER #{query_id}] 401 error reported to redeploy system")
+                elif status_code == 429:
+                    report_429_error()
+                    logger.warning(f"[WORKER #{query_id}] 429 error reported to redeploy system")
+
+                # Report error to token pool as well
+                token_pool.report_error(token_session)
+
+                # Update worker stats (error)
+                update_worker_stats(query_id, 'error')
+
+                logger.error(f"[WORKER #{query_id}] ❌ HTTP {status_code} error after {elapsed:.2f}s - reported to redeploy system")
             else:
-                logger.info(f"[WORKER #{query_id}] 📭 No new items ({elapsed:.2f}s, next scan in {refresh_delay}s)")
-                # Update worker stats (successful scan, but no items)
-                update_worker_stats(query_id, 'success', 0)
-                
+                # Successful scan - got items list
+                all_items = search_result
+
+                # Report successful request to token pool AND redeploy system
+                token_pool.report_success(token_session)
+
+                # Report success to redeploy system for success streak
+                from railway_redeploy import report_success
+                report_success()
+
+                # Put items into queue
+                if all_items:
+                    queue.put((all_items, query_id))
+                    logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items in {elapsed:.2f}s (next scan in {refresh_delay}s)")
+                    # Update worker stats
+                    update_worker_stats(query_id, 'success', len(all_items))
+                else:
+                    logger.info(f"[WORKER #{query_id}] 📭 No new items ({elapsed:.2f}s, next scan in {refresh_delay}s)")
+                    # Update worker stats (successful scan, but no items)
+                    update_worker_stats(query_id, 'success', 0)
+
         except Exception as e:
             elapsed = time.time() - start_time
             # Report error to token pool
             token_pool.report_error(token_session)
-            
+
             # Update worker stats (error)
             update_worker_stats(query_id, 'error')
-            
+
+            # Report generic error to redeploy system (fallback)
+            from railway_redeploy import report_403_error
+            report_403_error()
+            logger.warning(f"[WORKER #{query_id}] Generic error reported as 403 to redeploy system")
+
             # Still need to get refresh_delay for sleep
             refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
-            logger.error(f"[WORKER #{query_id}] ❌ Error after {elapsed:.2f}s: {e}")
-            
+            logger.error(f"[WORKER #{query_id}] ❌ Unexpected error after {elapsed:.2f}s: {e}")
+
             # Check if token session became invalid
             if not token_session.is_valid:
                 logger.warning(f"[WORKER #{query_id}] Session #{token_session.session_id} is invalid! Getting new session...")
