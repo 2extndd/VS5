@@ -243,7 +243,7 @@
 </div>
 
 <script>
-// Workers Status Functions
+// Workers Status Functions (Compact Version)
 function refreshWorkerStats() {
     fetch('/api/worker_stats')
         .then(response => response.json())
@@ -252,6 +252,8 @@ function refreshWorkerStats() {
                 updateWorkerStatus(data.workers);
             } else {
                 console.error('Error fetching worker stats:', data.error);
+                document.getElementById('workers-status-container').innerHTML = 
+                    '<div class="alert alert-danger">Error: ' + (data.error || 'Unknown error') + '</div>';
             }
         })
         .catch(error => {
@@ -265,7 +267,7 @@ function updateWorkerStatus(workers) {
     const container = document.getElementById('workers-status-container');
     
     if (!workers || Object.keys(workers).length === 0) {
-        container.innerHTML = '<div class="alert alert-warning">No worker data available yet</div>';
+        container.innerHTML = '<div class="alert alert-warning">No worker data available yet. Workers will start reporting after first scan cycle.</div>';
         return;
     }
     
@@ -275,102 +277,131 @@ function updateWorkerStatus(workers) {
     const workersWithItems = Object.values(workers).filter(w => w.total_items > 0).length;
     
     // Group workers by status
-    const successWorkers = [];
     const errorWorkers = [];
     const idleWorkers = [];
+    const activeWorkers = [];
     
     Object.entries(workers).forEach(([workerId, stats]) => {
         const recentScans = stats.recent_scans || [];
-        if (recentScans.length > 0) {
-            const lastScan = recentScans[recentScans.length - 1];
-            if (lastScan.status === 'error') {
-                errorWorkers.push({ id: workerId, ...stats });
-            } else if (lastScan.items > 0) {
-                successWorkers.push({ id: workerId, ...stats });
-            } else {
-                idleWorkers.push({ id: workerId, ...stats });
-            }
+        const workerData = { id: workerId, ...stats };
+        
+        if (stats.total_errors > 0) {
+            errorWorkers.push(workerData);
+        } else if (recentScans.length === 0 || stats.total_scans === 0) {
+            idleWorkers.push(workerData);
         } else {
-            idleWorkers.push({ id: workerId, ...stats });
+            activeWorkers.push(workerData);
         }
     });
     
-    // Build HTML
+    // Build compact HTML with badges
     let html = `
         <div class="row mb-3">
             <div class="col-md-3">
-                <div class="alert alert-primary mb-0">
+                <div class="alert alert-primary mb-0 py-2">
                     <strong>${totalWorkers}</strong> Total Workers
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="alert alert-success mb-0">
-                    <strong>${workersWithItems}</strong> Found Items
+                <div class="alert alert-success mb-0 py-2">
+                    <strong>${activeWorkers.length}</strong> Active
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="alert alert-warning mb-0">
-                    <strong>${workersWithErrors}</strong> With Errors
+                <div class="alert alert-danger mb-0 py-2">
+                    <strong>${errorWorkers.length}</strong> With Errors
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="alert alert-info mb-0">
+                <div class="alert alert-secondary mb-0 py-2">
                     <strong>${idleWorkers.length}</strong> Idle
                 </div>
             </div>
         </div>
     `;
     
-    // Show workers with errors first
+    // Compact badges for all workers
+    html += '<div class="mb-3">';
+    html += '<small class="text-muted d-block mb-2">Worker Status (Last scan):</small>';
+    html += '<div style="display: flex; flex-wrap: wrap; gap: 4px;">';
+    
+    // Sort workers by ID
+    const sortedWorkers = Object.entries(workers).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+    
+    sortedWorkers.forEach(([workerId, stats]) => {
+        let badgeClass = 'bg-success';
+        let icon = '✅';
+        let title = `Worker #${workerId}: OK`;
+        
+        const recentScans = stats.recent_scans || [];
+        
+        if (stats.total_errors > 0) {
+            badgeClass = 'bg-danger';
+            icon = '❌';
+            title = `Worker #${workerId}: ${stats.total_errors} errors`;
+        } else if (recentScans.length === 0 || stats.total_scans === 0) {
+            badgeClass = 'bg-secondary';
+            icon = '⏸️';
+            title = `Worker #${workerId}: Idle (no scans yet)`;
+        } else if (recentScans.length > 0) {
+            const lastScan = recentScans[recentScans.length - 1];
+            if (lastScan.items > 0) {
+                icon = '✅';
+                title = `Worker #${workerId}: ${lastScan.items} items found`;
+            } else {
+                icon = '📭';
+                title = `Worker #${workerId}: No items`;
+            }
+        }
+        
+        html += `<span class="badge ${badgeClass}" title="${title}" style="font-size: 11px; padding: 4px 6px;">${icon}${workerId}</span>`;
+    });
+    
+    html += '</div>';
+    html += '</div>';
+    
+    // Show details for workers with errors (collapsed by default)
     if (errorWorkers.length > 0) {
-        html += `<h6 class="text-danger mt-3">⚠️ Workers with Recent Errors (${errorWorkers.length}):</h6>`;
-        html += '<div class="row">';
-        errorWorkers.slice(0, 24).forEach(worker => {
+        html += `
+            <div class="accordion mt-3" id="errorWorkersAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#errorWorkersDetails">
+                            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                            Workers with Errors (${errorWorkers.length}) - Click to expand
+                        </button>
+                    </h2>
+                    <div id="errorWorkersDetails" class="accordion-collapse collapse">
+                        <div class="accordion-body">
+                            <div class="row">
+        `;
+        
+        errorWorkers.forEach(worker => {
             const recentScans = worker.recent_scans.map(scan => {
                 const icon = scan.status === 'success' ? '✅' : '❌';
-                return `${icon} ${scan.time}`;
+                return `${icon}${scan.time}`;
             }).join(' ');
+            
             html += `
-                <div class="col-md-3 mb-2">
+                <div class="col-md-4 mb-2">
                     <div class="card border-danger">
                         <div class="card-body p-2">
                             <small><strong>Worker #${worker.id}</strong></small><br>
-                            <small class="text-muted">Recent: ${recentScans}</small>
+                            <small class="text-danger">Errors: ${worker.total_errors}</small><br>
+                            <small class="text-muted">Recent: ${recentScans || 'No scans'}</small>
                         </div>
                     </div>
                 </div>
             `;
         });
-        if (errorWorkers.length > 24) {
-            html += `<div class="col-12"><small class="text-muted">... and ${errorWorkers.length - 24} more</small></div>`;
-        }
-        html += '</div>';
-    }
-    
-    // Show successful workers
-    if (successWorkers.length > 0) {
-        html += `<h6 class="text-success mt-3">✅ Workers with Items (${successWorkers.length}):</h6>`;
-        html += '<div class="row">';
-        successWorkers.slice(0, 24).forEach(worker => {
-            const recentScans = worker.recent_scans.map(scan => {
-                const icon = scan.items > 0 ? `✅(${scan.items})` : '📭';
-                return `${icon}`;
-            }).join(' ');
-            html += `
-                <div class="col-md-3 mb-2">
-                    <div class="card border-success">
-                        <div class="card-body p-2">
-                            <small><strong>Worker #${worker.id}</strong> (${worker.total_items} items)</small><br>
-                            <small class="text-muted">Recent: ${recentScans}</small>
+        
+        html += `
+                            </div>
                         </div>
                     </div>
                 </div>
-            `;
-        });
-        if (successWorkers.length > 24) {
-            html += `<div class="col-12"><small class="text-muted">... and ${successWorkers.length - 24} more</small></div>`;
-        }
-        html += '</div>';
+            </div>
+        `;
     }
     
     container.innerHTML = html;
@@ -380,7 +411,10 @@ function updateWorkerStatus(workers) {
 setInterval(refreshWorkerStats, 30000);
 
 // Initial load
-refreshWorkerStats();
+document.addEventListener('DOMContentLoaded', function() {
+    refreshWorkerStats();
+});
+
 </script>
 
 
