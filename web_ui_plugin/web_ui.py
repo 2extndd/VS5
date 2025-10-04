@@ -1689,6 +1689,9 @@ def force_redeploy():
         
         from railway_redeploy import redeploy_manager
         
+        logger.critical("[FORCE_REDEPLOY] ════════════════════════════════════════")
+        logger.critical("[FORCE_REDEPLOY] 🚨 MANUAL REDEPLOY REQUESTED VIA WEB UI!")
+        logger.critical("[FORCE_REDEPLOY] ════════════════════════════════════════")
         logger.info("[FORCE_REDEPLOY] Manual redeploy initiated via web interface")
         
         # Принудительно вызываем редеплой
