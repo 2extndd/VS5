@@ -280,79 +280,132 @@ class RailwayRedeployManager:
             logger.info("[REDEPLOY] 🔄 _perform_redeploy() called")
             logger.info("[REDEPLOY] ════════════════════════════════════════")
             logger.info("[REDEPLOY] 🚀 Attempting GRACEFUL redeploy (no crash!)")
-            logger.info(f"[REDEPLOY] Checking Railway API token...")
-            
+
+            # Детальная диагностика
+            logger.info(f"[REDEPLOY] Project ID: {self.project_id}")
+            logger.info(f"[REDEPLOY] Service ID: {self.service_id}")
+            logger.info(f"[REDEPLOY] API Token: {self.api_token[:10]}..." if self.api_token else "[REDEPLOY] ❌ No API token")
+
             if not self.api_token:
                 logger.error("[REDEPLOY] ❌ Railway API token not found in environment")
                 logger.info("[REDEPLOY] Falling back to alternative redeploy methods...")
                 self._fallback_redeploy()
                 return
-            
-            logger.info(f"[REDEPLOY] ✅ Token found: {self.api_token[:8]}...")
-            logger.info(f"[REDEPLOY] ✅ Service ID: {self.service_id}")
-            
-            # Railway GraphQL API endpoint
-            url = "https://backboard.railway.com/graphql/v2"
-            
-            # GraphQL mutation для редеплоя
-            mutation = """
-            mutation serviceRedeploy($serviceId: String!) {
-                serviceRedeploy(serviceId: $serviceId) {
-                    id
-                }
-            }
-            """
-            
-            headers = {
-                "Authorization": f"Bearer {self.api_token}",
-                "Content-Type": "application/json"
-            }
-            
+
             # Если service_id не установлен, пытаемся получить его
             if not self.service_id:
+                logger.info("[REDEPLOY] Service ID not set, trying to get it from API...")
                 self.service_id = self._get_service_id()
                 if not self.service_id:
                     logger.error("[REDEPLOY] Could not get service ID. Using fallback method.")
                     self._fallback_redeploy()
                     return
-            
+
+            logger.info(f"[REDEPLOY] ✅ All credentials ready - Project: {self.project_id}, Service: {self.service_id}")
+
+            # Railway GraphQL API endpoint
+            url = "https://backboard.railway.com/graphql/v2"
+
+            # GraphQL mutation для редеплоя (улучшенная версия)
+            mutation = """
+            mutation serviceRedeploy($serviceId: String!) {
+                serviceRedeploy(serviceId: $serviceId) {
+                    id
+                    name
+                    status
+                }
+            }
+            """
+
+            headers = {
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json",
+                "User-Agent": "RailwayRedeployManager/1.0"
+            }
+
             payload = {
                 "query": mutation,
                 "variables": {
                     "serviceId": self.service_id
                 }
             }
-            
-            logger.info(f"[REDEPLOY] Sending redeploy request to Railway API...")
+
+            logger.info(f"[REDEPLOY] 📡 Sending GraphQL mutation to {url}")
+            logger.info(f"[REDEPLOY] Mutation: serviceRedeploy({self.service_id})")
+
             response = requests.post(url, json=payload, headers=headers, timeout=30)
-            
+
+            logger.info(f"[REDEPLOY] 📨 Response status: {response.status_code}")
+            logger.info(f"[REDEPLOY] 📨 Response headers: {dict(response.headers)}")
+
             if response.status_code == 200:
                 result = response.json()
-                if "errors" not in result:
+                logger.info(f"[REDEPLOY] 📨 Response JSON keys: {list(result.keys())}")
+
+                # Проверить ошибки в GraphQL ответе
+                if "errors" in result:
+                    logger.error(f"[REDEPLOY] ❌ GraphQL errors: {result['errors']}")
+                    logger.error(f"[REDEPLOY] Full response: {result}")
+                    self._fallback_redeploy()
+                    return
+
+                # Проверить успешный ответ
+                data = result.get("data", {})
+                service_redeploy = data.get("serviceRedeploy", {})
+
+                if service_redeploy and service_redeploy.get("id"):
+                    service_id = service_redeploy.get("id")
+                    service_name = service_redeploy.get("name", "unknown")
+                    service_status = service_redeploy.get("status", "unknown")
+
                     logger.info("[REDEPLOY] ════════════════════════════════════════")
-                    logger.info("[REDEPLOY] ✅ Railway redeploy initiated successfully!")
+                    logger.info(f"[REDEPLOY] ✅ Railway redeploy initiated successfully!")
+                    logger.info(f"[REDEPLOY] 🔄 Service: {service_name} ({service_id})")
+                    logger.info(f"[REDEPLOY] 📊 Status: {service_status}")
                     logger.info("[REDEPLOY] 🔄 Service will restart gracefully (NO CRASH)")
                     logger.info("[REDEPLOY] ⏱️  Expected downtime: ~30-60 seconds")
                     logger.info("[REDEPLOY] ════════════════════════════════════════")
+
                     self.last_redeploy_time = datetime.now(timezone(timedelta(hours=3)))
                     self._save_last_redeploy_time(self.last_redeploy_time)
                     self._reset_error_tracking()
+
+                    # Показать статус в Web UI
+                    logger.info(f"[REDEPLOY] 💡 Check Railway dashboard for deployment status")
                 else:
-                    logger.error(f"[REDEPLOY] GraphQL errors: {result.get('errors')}")
+                    logger.error(f"[REDEPLOY] ❌ No service redeploy data in response: {result}")
                     self._fallback_redeploy()
-            else:
-                logger.error(f"[REDEPLOY] API request failed: {response.status_code} - {response.text}")
+
+            elif response.status_code == 401:
+                logger.error(f"[REDEPLOY] ❌ Authentication failed (401) - check API token permissions")
+                logger.error(f"[REDEPLOY] Token: {self.api_token[:20]}...")
                 self._fallback_redeploy()
-                
+            elif response.status_code == 403:
+                logger.error(f"[REDEPLOY] ❌ Forbidden (403) - token doesn't have redeploy permissions")
+                self._fallback_redeploy()
+            elif response.status_code == 404:
+                logger.error(f"[REDEPLOY] ❌ Not found (404) - check service ID: {self.service_id}")
+                self._fallback_redeploy()
+            else:
+                logger.error(f"[REDEPLOY] ❌ API request failed: {response.status_code}")
+                logger.error(f"[REDEPLOY] Response: {response.text}")
+                self._fallback_redeploy()
+
         except Exception as e:
-            logger.error(f"[REDEPLOY] Exception during redeploy: {e}")
+            logger.error(f"[REDEPLOY] ❌ Exception during API redeploy: {e}")
+            import traceback
+            logger.error(f"[REDEPLOY] Traceback: {traceback.format_exc()}")
             self._fallback_redeploy()
     
     def _get_service_id(self):
         """Получить Service ID для текущего проекта"""
         try:
+            logger.info(f"[REDEPLOY] Getting service ID from Railway API...")
+            logger.info(f"[REDEPLOY] Project ID: {self.project_id}")
+            logger.info(f"[REDEPLOY] API Token: {self.api_token[:10]}..." if self.api_token else "[REDEPLOY] No API token")
+
             url = "https://backboard.railway.com/graphql/v2"
-            
+
             query = """
             query project($projectId: String!) {
                 project(id: $projectId) {
@@ -367,36 +420,50 @@ class RailwayRedeployManager:
                 }
             }
             """
-            
+
             headers = {
                 "Authorization": f"Bearer {self.api_token}",
                 "Content-Type": "application/json"
             }
-            
+
             payload = {
                 "query": query,
                 "variables": {
                     "projectId": self.project_id
                 }
             }
-            
+
+            logger.info(f"[REDEPLOY] Making GraphQL request to {url}")
             response = requests.post(url, json=payload, headers=headers, timeout=30)
-            
+
+            logger.info(f"[REDEPLOY] GraphQL response status: {response.status_code}")
+            logger.info(f"[REDEPLOY] GraphQL response: {response.text[:500]}...")
+
             if response.status_code == 200:
                 result = response.json()
+                logger.info(f"[REDEPLOY] GraphQL result keys: {list(result.keys())}")
+
+                # Проверить ошибки в GraphQL ответе
+                if "errors" in result:
+                    logger.error(f"[REDEPLOY] GraphQL errors: {result['errors']}")
+                    return None
+
                 services = result.get("data", {}).get("project", {}).get("services", {}).get("edges", [])
-                
+                logger.info(f"[REDEPLOY] Found {len(services)} services")
+
                 # Ищем основной сервис (обычно первый или с именем содержащим "app", "web", "main")
                 for service in services:
                     service_node = service.get("node", {})
                     service_name = service_node.get("name", "").lower()
                     service_id = service_node.get("id")
-                    
+
+                    logger.info(f"[REDEPLOY] Checking service: {service_name} ({service_id})")
+
                     # Приоритет для основного сервиса
                     if any(keyword in service_name for keyword in ["app", "web", "main", "vs5"]):
                         logger.info(f"[REDEPLOY] Found main service: {service_name} ({service_id})")
                         return service_id
-                
+
                 # Если не нашли основной, берем первый
                 if services:
                     first_service = services[0].get("node", {})
@@ -404,22 +471,61 @@ class RailwayRedeployManager:
                     service_name = first_service.get("name", "unknown")
                     logger.info(f"[REDEPLOY] Using first service: {service_name} ({service_id})")
                     return service_id
-            
-            logger.error("[REDEPLOY] Could not retrieve service ID from Railway API")
+
+            logger.error(f"[REDEPLOY] Could not retrieve service ID - HTTP {response.status_code}")
+            logger.error(f"[REDEPLOY] Response: {response.text}")
             return None
-            
+
         except Exception as e:
             logger.error(f"[REDEPLOY] Error getting service ID: {e}")
+            import traceback
+            logger.error(f"[REDEPLOY] Traceback: {traceback.format_exc()}")
             return None
     
     def _fallback_redeploy(self):
         """Fallback метод через CLI команду"""
         try:
-            logger.info("[REDEPLOY] Attempting fallback redeploy via Railway CLI...")
-            
+            logger.info("[REDEPLOY] 🔧 Attempting fallback redeploy via Railway CLI...")
+            logger.info(f"[REDEPLOY] Current working directory: {os.getcwd()}")
+
             import subprocess
-            
+
+            # Проверяем, установлен ли Railway CLI
+            try:
+                check_result = subprocess.run(
+                    ["railway", "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                logger.info(f"[REDEPLOY] Railway CLI version: {check_result.stdout.strip()}")
+            except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+                logger.warning(f"[REDEPLOY] Railway CLI check failed: {e}")
+                logger.warning("[REDEPLOY] CLI may not be installed in container")
+
+                # Пробуем установить CLI
+                logger.info("[REDEPLOY] Attempting to install Railway CLI...")
+                try:
+                    install_result = subprocess.run(
+                        ["curl", "-fsSL", "https://railway.app/install.sh"],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        shell=True
+                    )
+
+                    if install_result.returncode == 0:
+                        logger.info("[REDEPLOY] ✅ Railway CLI installed successfully")
+                        logger.info(f"[REDEPLOY] Install output: {install_result.stdout[:200]}...")
+                    else:
+                        logger.error(f"[REDEPLOY] ❌ CLI installation failed: {install_result.stderr}")
+                        return self._emergency_redeploy()
+                except Exception as e:
+                    logger.error(f"[REDEPLOY] ❌ CLI installation error: {e}")
+                    return self._emergency_redeploy()
+
             # Попытка выполнить редеплой через CLI
+            logger.info("[REDEPLOY] Executing: railway redeploy -y")
             result = subprocess.run(
                 ["railway", "redeploy", "-y"],
                 capture_output=True,
@@ -427,31 +533,45 @@ class RailwayRedeployManager:
                 timeout=60,
                 cwd=os.getcwd()
             )
-            
+
             logger.info(f"[REDEPLOY] CLI command result: return_code={result.returncode}")
             logger.info(f"[REDEPLOY] CLI stdout: {result.stdout}")
-            logger.info(f"[REDEPLOY] CLI stderr: {result.stderr}")
-            
+            if result.stderr:
+                logger.warning(f"[REDEPLOY] CLI stderr: {result.stderr}")
+
             if result.returncode == 0:
+                logger.info("[REDEPLOY] ════════════════════════════════════════")
                 logger.info("[REDEPLOY] ✅ Railway redeploy via CLI successful!")
+                logger.info("[REDEPLOY] 🔄 Service will restart gracefully (NO CRASH)")
+                logger.info("[REDEPLOY] ⏱️  Expected downtime: ~30-60 seconds")
+                logger.info("[REDEPLOY] ════════════════════════════════════════")
+
                 self.last_redeploy_time = datetime.now(timezone(timedelta(hours=3)))
                 self._save_last_redeploy_time(self.last_redeploy_time)
                 self._reset_error_tracking()
+
+                # Показать статус в Web UI
+                logger.info(f"[REDEPLOY] 💡 Check Railway dashboard for deployment status")
                 return True
             else:
-                logger.error(f"[REDEPLOY] CLI redeploy failed: {result.stderr}")
-                return False
-                
+                logger.error(f"[REDEPLOY] ❌ CLI redeploy failed with code {result.returncode}")
+                logger.error(f"[REDEPLOY] Error output: {result.stderr}")
+
+                # Попытка альтернативного метода через HTTP API
+                logger.info("[REDEPLOY] 🔄 Trying HTTP API fallback...")
+                return self._http_api_redeploy()
+
         except subprocess.TimeoutExpired:
-            logger.error("[REDEPLOY] CLI redeploy timed out")
-            return False
+            logger.error("[REDEPLOY] ❌ CLI redeploy timed out after 60 seconds")
+            return self._emergency_redeploy()
         except FileNotFoundError:
-            logger.error("[REDEPLOY] Railway CLI not found in production environment")
-            # Пробуем альтернативный метод
+            logger.error("[REDEPLOY] ❌ Railway CLI not found even after installation attempt")
             return self._emergency_redeploy()
         except Exception as e:
-            logger.error(f"[REDEPLOY] Fallback redeploy failed: {e}")
-            return False
+            logger.error(f"[REDEPLOY] ❌ Fallback redeploy failed: {e}")
+            import traceback
+            logger.error(f"[REDEPLOY] Traceback: {traceback.format_exc()}")
+            return self._emergency_redeploy()
     
     def _emergency_redeploy(self):
         """Экстренный метод редеплоя через webhook или прямой триггер"""
@@ -479,7 +599,16 @@ class RailwayRedeployManager:
             self._reset_error_tracking()
             logger.info("[REDEPLOY] Error tracking reset")
             
-            # Метод 1: Пробуем через Railway webhook (если настроен)
+            # Метод 1: Пробуем через HTTP API как последнее средство
+            logger.critical("[REDEPLOY] ════════════════════════════════════════")
+            logger.critical("[REDEPLOY] 🔄 METHOD 1: Trying HTTP API as last resort...")
+            logger.critical("[REDEPLOY] ════════════════════════════════════════")
+
+            if self._http_api_redeploy():
+                logger.critical("[REDEPLOY] ✅ HTTP API redeploy succeeded!")
+                return True
+
+            # Метод 2: Пробуем через Railway webhook (если настроен)
             webhook_url = os.getenv('RAILWAY_REDEPLOY_WEBHOOK')
             if webhook_url:
                 try:
@@ -490,7 +619,7 @@ class RailwayRedeployManager:
                         return True
                 except Exception as e:
                     logger.warning(f"[REDEPLOY] Webhook failed: {e}")
-            
+
             # ⚠️ ВАЖНО: НЕ КРАШИМ БОТ!
             # Вместо краша просто сбрасываем счетчики и продолжаем работу
             # Система защиты (прокси, rate limits) будет продолжать защищать бота
@@ -506,6 +635,52 @@ class RailwayRedeployManager:
         except Exception as e:
             logger.error(f"[REDEPLOY] Emergency redeploy failed: {e}")
             return False
+
+    def _http_api_redeploy(self):
+        """Альтернативный метод редеплоя через HTTP API"""
+        try:
+            logger.info("[REDEPLOY] 🌐 Trying HTTP API redeploy as last resort...")
+
+            # Railway REST API для редеплоя
+            url = f"https://backboard.railway.com/projects/{self.project_id}/services/{self.service_id}/redeploy"
+
+            headers = {
+                "Authorization": f"Bearer {self.api_token}",
+                "Content-Type": "application/json",
+                "User-Agent": "RailwayRedeployManager/1.0"
+            }
+
+            logger.info(f"[REDEPLOY] HTTP API URL: {url}")
+            logger.info(f"[REDEPLOY] Making POST request to trigger redeploy...")
+
+            response = requests.post(url, headers=headers, timeout=30)
+
+            logger.info(f"[REDEPLOY] HTTP API response status: {response.status_code}")
+            logger.info(f"[REDEPLOY] HTTP API response: {response.text[:300]}...")
+
+            if response.status_code in [200, 201, 202]:
+                logger.info("[REDEPLOY] ════════════════════════════════════════")
+                logger.info("[REDEPLOY] ✅ Railway HTTP API redeploy successful!")
+                logger.info("[REDEPLOY] 🔄 Service will restart gracefully (NO CRASH)")
+                logger.info("[REDEPLOY] ⏱️  Expected downtime: ~30-60 seconds")
+                logger.info("[REDEPLOY] ════════════════════════════════════════")
+
+                self.last_redeploy_time = datetime.now(timezone(timedelta(hours=3)))
+                self._save_last_redeploy_time(self.last_redeploy_time)
+                self._reset_error_tracking()
+
+                logger.info(f"[REDEPLOY] 💡 Check Railway dashboard for deployment status")
+                return True
+            else:
+                logger.error(f"[REDEPLOY] ❌ HTTP API redeploy failed: {response.status_code}")
+                logger.error(f"[REDEPLOY] Response: {response.text}")
+                return self._emergency_redeploy()
+
+        except Exception as e:
+            logger.error(f"[REDEPLOY] ❌ HTTP API redeploy failed: {e}")
+            import traceback
+            logger.error(f"[REDEPLOY] Traceback: {traceback.format_exc()}")
+            return self._emergency_redeploy()
     
     def _reset_error_tracking(self):
         """Сбросить отслеживание ошибок после успешного редеплоя"""

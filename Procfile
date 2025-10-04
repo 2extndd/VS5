@@ -1,1 +1,1 @@
-web: python vinted_notifications.py
+web: pip install railway && python vinted_notifications.py
