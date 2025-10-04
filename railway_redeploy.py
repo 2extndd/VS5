@@ -278,6 +278,8 @@ class RailwayRedeployManager:
         """Выполнить редеплой через Railway API"""
         try:
             logger.info("[REDEPLOY] 🔄 _perform_redeploy() called")
+            logger.info("[REDEPLOY] ════════════════════════════════════════")
+            logger.info("[REDEPLOY] 🚀 Attempting GRACEFUL redeploy (no crash!)")
             logger.info(f"[REDEPLOY] Checking Railway API token...")
             
             if not self.api_token:
@@ -285,6 +287,9 @@ class RailwayRedeployManager:
                 logger.info("[REDEPLOY] Falling back to alternative redeploy methods...")
                 self._fallback_redeploy()
                 return
+            
+            logger.info(f"[REDEPLOY] ✅ Token found: {self.api_token[:8]}...")
+            logger.info(f"[REDEPLOY] ✅ Service ID: {self.service_id}")
             
             # Railway GraphQL API endpoint
             url = "https://backboard.railway.com/graphql/v2"
@@ -324,7 +329,11 @@ class RailwayRedeployManager:
             if response.status_code == 200:
                 result = response.json()
                 if "errors" not in result:
+                    logger.info("[REDEPLOY] ════════════════════════════════════════")
                     logger.info("[REDEPLOY] ✅ Railway redeploy initiated successfully!")
+                    logger.info("[REDEPLOY] 🔄 Service will restart gracefully (NO CRASH)")
+                    logger.info("[REDEPLOY] ⏱️  Expected downtime: ~30-60 seconds")
+                    logger.info("[REDEPLOY] ════════════════════════════════════════")
                     self.last_redeploy_time = datetime.now(timezone(timedelta(hours=3)))
                     self._save_last_redeploy_time(self.last_redeploy_time)
                     self._reset_error_tracking()
