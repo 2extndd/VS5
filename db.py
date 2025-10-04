@@ -51,7 +51,7 @@ def get_db_connection():
                     END $$;
                 """)
                 conn.commit()
-                logger.info("Auto-migration: brand_title column checked/added")
+                logger.debug("Auto-migration: brand_title column checked/added")
             except Exception as e:
                 logger.warning(f"Auto-migration failed: {e}")
             
@@ -75,7 +75,7 @@ def get_db_connection():
         if 'brand_title' not in column_names:
             cursor.execute("ALTER TABLE items ADD COLUMN brand_title TEXT DEFAULT ''")
             conn.commit()
-            logger.info("Auto-migration: brand_title column added to SQLite")
+            logger.debug("Auto-migration: brand_title column added to SQLite")
         else:
             logger.debug("Auto-migration: brand_title column already exists in SQLite")
     except Exception as e:

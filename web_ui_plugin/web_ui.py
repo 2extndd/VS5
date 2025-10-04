@@ -2040,6 +2040,10 @@ def api_worker_stats():
 def web_ui_process():
     logger.info("Web UI process started")
     
+    # Disable werkzeug HTTP request logs (too verbose)
+    import logging
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    
     # Use Railway's PORT environment variable if available, otherwise fallback to configured port
     port = int(os.environ.get('PORT', configuration_values.WEB_UI_PORT))
     logger.info(f"Starting web UI on port {port}")

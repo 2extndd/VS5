@@ -280,7 +280,7 @@ class requester:
     def set_locale(self, locale):
         """Установка локали (для совместимости)"""
         if self.debug:
-            logger.info(f"[DEBUG] Setting locale to: {locale}")
+            logger.debug(f"[DEBUG] Setting locale to: {locale}")
         
         # Обновляем headers для конкретной локали
         locale_headers = {

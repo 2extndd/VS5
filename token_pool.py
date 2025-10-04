@@ -166,7 +166,7 @@ class TokenPool:
             session.headers["Authorization"] = f"Bearer {access_token}"
             
             token_session = TokenSession(session_id, session, access_token, user_agent)
-            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} created: token={access_token[:20]}...")
+            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} created | UA: {user_agent.split('(')[0].strip()[:30]}")
             
             return token_session
             

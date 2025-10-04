@@ -91,10 +91,10 @@ def get_random_proxy() -> Optional[str]:
     """
     global _PROXY_CACHE, _PROXY_CACHE_INITIALIZED, _SINGLE_PROXY
     
-    logger.info(f"[PROXY] get_random_proxy() called")
-    logger.info(f"[PROXY] Cache initialized: {_PROXY_CACHE_INITIALIZED}")
-    logger.info(f"[PROXY] Cache size: {len(_PROXY_CACHE) if _PROXY_CACHE else 0}")
-    logger.info(f"[PROXY] Single proxy mode: {_SINGLE_PROXY is not None}")
+    logger.debug(f"[PROXY] get_random_proxy() called")
+    logger.debug(f"[PROXY] Cache initialized: {_PROXY_CACHE_INITIALIZED}")
+    logger.debug(f"[PROXY] Cache size: {len(_PROXY_CACHE) if _PROXY_CACHE else 0}")
+    logger.debug(f"[PROXY] Single proxy mode: {_SINGLE_PROXY is not None}")
 
     # Import db here to avoid circular imports
     import db
