@@ -245,8 +245,6 @@ class requester:
                     logger.info("[DEBUG] No access_token_web found in cookies")
                 return False
             else:
-                if self.debug:
-                    logger.info(f"[DEBUG] Main page request failed: {response.status_code}")
                 return False
                 
         except Exception as e:
@@ -301,10 +299,6 @@ class requester:
             if self.debug:
                 logger.info(f"[PROXY] Rotated to random proxy (request #{self.request_count})")
         
-        if self.debug:
-            logger.info(f"[DEBUG] Making GET request to: {url} (request #{self.request_count})")
-            if params:
-                logger.info(f"[DEBUG] Request params: {params}")
         
         tried = 0
         while tried < self.MAX_RETRIES:
@@ -327,8 +321,6 @@ class requester:
                 except:
                     pass  # Don't fail request if counter fails
                 
-                if self.debug:
-                    logger.info(f"[DEBUG] Request to {url} returned status {response.status_code}")
                 
                 if response.status_code == 200:
                     # Сообщаем об успешном запросе для сброса счетчика 403 ошибок
@@ -336,8 +328,6 @@ class requester:
                         report_success()
                     return response
                 elif response.status_code in (401, 403):
-                    if self.debug:
-                        logger.info(f"[DEBUG] Auth error {response.status_code}, refreshing token (try {tried}/{self.MAX_RETRIES})")
                     
                     # Сообщаем системе автоматического редеплоя о соответствующей ошибке
                     if REDEPLOY_AVAILABLE:
@@ -382,8 +372,6 @@ class requester:
                     return response
                     
             except Exception as e:
-                if self.debug:
-                    logger.info(f"[DEBUG] Request error (try {tried}/{self.MAX_RETRIES}): {e}")
                 
                 if tried == self.MAX_RETRIES:
                     raise e
@@ -396,8 +384,6 @@ class requester:
     
     def post(self, url, data=None, json_data=None):
         """POST запрос (для совместимости)"""
-        if self.debug:
-            logger.info(f"[DEBUG] Making POST request to: {url}")
         
         try:
             if json_data:

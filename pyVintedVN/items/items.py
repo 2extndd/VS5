@@ -118,27 +118,13 @@ class Items:
             # Parse the response
             response_data = response.json()
             
-            # Debug logs
-            logger.info(f"[DEBUG] Items API response status: {response.status_code}")
-            logger.info(f"[DEBUG] API URL: {api_url}")
-            logger.info(f"[DEBUG] API params: {params}")
-            logger.info(f"[DEBUG] Response JSON keys: {list(response_data.keys()) if response_data else 'None'}")
-            if 'items' in response_data:
-                logger.info(f"[DEBUG] Number of items in API response: {len(response_data['items'])}")
-                if response_data['items']:
-                    first_item = response_data['items'][0]
-                    logger.info(f"[DEBUG] First item ID: {first_item.get('id', 'Unknown')}")
-                    logger.info(f"[DEBUG] First item title: {first_item.get('title', 'Unknown')}")
-            else:
-                logger.info(f"[DEBUG] No 'items' key in API response")
-                logger.info(f"[DEBUG] Full API response: {response_data}")
+            # Debug logs removed as requested
             
             items = response_data["items"]
 
             # Return either Item objects or raw JSON data
             if not json:
                 item_objects = [Item(_item) for _item in items]
-                logger.info(f"[DEBUG] Created {len(item_objects)} Item objects from API response")
                 return item_objects
             else:
                 return items
