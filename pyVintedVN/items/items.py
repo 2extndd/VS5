@@ -25,7 +25,21 @@ class Items:
     Example:
         >>> items = Items()
         >>> results = items.search("https://www.vinted.fr/catalog?search_text=shoes")
+        
+        >>> # Or with dedicated session:
+        >>> items = Items(session=my_session)
+        >>> results = items.search("https://www.vinted.fr/catalog?search_text=shoes")
     """
+    
+    def __init__(self, session=None):
+        """
+        Initialize Items class.
+        
+        Args:
+            session: Optional requests.Session instance with Bearer token.
+                     If not provided, uses global requester (legacy mode).
+        """
+        self.session = session
 
     def search(self, url: str, nbr_items: int = 20, page: int = 1,
                time: Optional[int] = None, json: bool = False) -> List[Item]:
@@ -49,10 +63,19 @@ class Items:
         # Extract the domain from the URL and set the locale
         locale = urlparse(url).netloc
         
-        # Use global requester instance (with random proxy rotation)
-        from pyVintedVN.requester import requester as requester_instance
-        
-        requester_instance.set_locale(locale)
+        # Use dedicated session if provided, otherwise fall back to global requester
+        if self.session:
+            # Using dedicated session from token pool
+            # Update locale-specific headers
+            self.session.headers.update({
+                "Host": locale,
+                "Referer": f"https://{locale}/",
+                "Origin": f"https://{locale}",
+            })
+        else:
+            # Legacy mode: use global requester instance
+            from pyVintedVN.requester import requester as requester_instance
+            requester_instance.set_locale(locale)
 
         # Parse the URL to get the API parameters
         params = self.parse_url(url, nbr_items, page, time)
@@ -61,8 +84,31 @@ class Items:
         api_url = f"https://{locale}{Urls.VINTED_API_URL}/{Urls.VINTED_PRODUCTS_ENDPOINT}"
 
         try:
-            # Make the request using global requester (random proxy on each request)
-            response = requester_instance.get(url=api_url, params=params)
+            # Make the request using dedicated session or global requester
+            if self.session:
+                # Using dedicated session from token pool
+                # Need to configure proxy for this request
+                import proxies
+                # Set random proxy for this session
+                proxy_dict = proxies.get_random_proxy()
+                if proxy_dict:
+                    converted_proxy = proxies.convert_proxy_string_to_dict(proxy_dict)
+                    self.session.proxies.update(converted_proxy)
+                
+                # Make the request with dedicated session
+                response = self.session.get(url=api_url, params=params, timeout=30, allow_redirects=True)
+                
+                # Increment API request counter
+                try:
+                    import db
+                    db.increment_api_requests()
+                except:
+                    pass
+            else:
+                # Legacy mode: use global requester
+                from pyVintedVN.requester import requester as requester_instance
+                response = requester_instance.get(url=api_url, params=params)
+            
             response.raise_for_status()
 
             # Parse the response

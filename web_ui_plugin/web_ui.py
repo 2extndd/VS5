@@ -1993,6 +1993,50 @@ def api_logs():
         return jsonify({'error': str(e), 'logs': [], 'total': 0}), 500
 
 
+@app.route('/api/token_pool_stats')
+def api_token_pool_stats():
+    """API endpoint for token pool statistics - shows unique tokens & User-Agents"""
+    try:
+        from token_pool import get_token_pool
+        token_pool = get_token_pool()
+        stats = token_pool.get_stats()
+        
+        return jsonify({
+            'status': 'success',
+            'stats': stats
+        })
+    except Exception as e:
+        logger.error(f"Error in api_token_pool_stats: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
+@app.route('/api/worker_stats')
+def api_worker_stats():
+    """API endpoint for worker statistics - shows which workers got items/errors"""
+    try:
+        import core
+        worker_stats = core.get_worker_stats()
+        
+        # Convert datetime objects to strings for JSON
+        for worker_id, stats in worker_stats.items():
+            if stats['last_success']:
+                stats['last_success'] = stats['last_success'].strftime('%Y-%m-%d %H:%M:%S')
+            if stats['last_error']:
+                stats['last_error'] = stats['last_error'].strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Convert recent_scans datetimes
+            for scan in stats['recent_scans']:
+                scan['time'] = scan['time'].strftime('%H:%M:%S')
+        
+        return jsonify({
+            'status': 'success',
+            'workers': worker_stats
+        })
+    except Exception as e:
+        logger.error(f"Error in api_worker_stats: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
 def web_ui_process():
     logger.info("Web UI process started")
     

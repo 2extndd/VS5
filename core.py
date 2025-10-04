@@ -4,9 +4,50 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from logger import get_logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import threading
+from datetime import datetime, timezone, timedelta
 
 # Get logger for this module
 logger = get_logger(__name__)
+
+# Global worker statistics
+_worker_stats = {}
+_worker_stats_lock = threading.Lock()
+
+def update_worker_stats(worker_id, status, items_count=0):
+    """Update global worker statistics"""
+    with _worker_stats_lock:
+        if worker_id not in _worker_stats:
+            _worker_stats[worker_id] = {
+                'last_success': None,
+                'last_error': None,
+                'total_scans': 0,
+                'total_items': 0,
+                'total_errors': 0,
+                'recent_scans': []  # Last 3 scans
+            }
+        
+        stats = _worker_stats[worker_id]
+        stats['total_scans'] += 1
+        
+        current_time = datetime.now(timezone(timedelta(hours=3)))
+        
+        if status == 'success':
+            stats['last_success'] = current_time
+            stats['total_items'] += items_count
+            stats['recent_scans'].append({'time': current_time, 'status': 'success', 'items': items_count})
+        elif status == 'error':
+            stats['last_error'] = current_time
+            stats['total_errors'] += 1
+            stats['recent_scans'].append({'time': current_time, 'status': 'error', 'items': 0})
+        
+        # Keep only last 3 scans
+        stats['recent_scans'] = stats['recent_scans'][-3:]
+
+def get_worker_stats():
+    """Get worker statistics for all workers"""
+    with _worker_stats_lock:
+        return dict(_worker_stats)
 
 
 def calculate_delay(published_timestamp, found_timestamp, max_hours=1):
@@ -245,9 +286,9 @@ def continuous_query_worker(query, queue, start_delay=0):
     Each query has its own worker running in a separate thread.
     
     This implements TRUE parallel processing:
-    - Query #1: scans every X sec independently
-    - Query #2: scans every X sec independently  
-    - Query #N: scans every X sec independently
+    - Query #1: scans every X sec independently with UNIQUE token & User-Agent
+    - Query #2: scans every X sec independently with UNIQUE token & User-Agent
+    - Query #N: scans every X sec independently with UNIQUE token & User-Agent
     
     Refresh delay is read from DB DYNAMICALLY on each cycle,
     so changes in Web UI apply immediately without restart!
@@ -265,11 +306,22 @@ def continuous_query_worker(query, queue, start_delay=0):
         logger.info(f"[WORKER #{query_id}] Waiting {start_delay:.1f}s before start (anti-ban)")
         time.sleep(start_delay)
     
-    logger.info(f"[WORKER #{query_id}] 🚀 Started - reading delay from DB dynamically")
+    logger.info(f"[WORKER #{query_id}] 🚀 Started - will use unique token & User-Agent")
     
-    # Create Vinted instance for THIS worker
-    vinted = Vinted()
-    logger.info(f"[WORKER #{query_id}] Created Vinted instance")
+    # Get dedicated session from token pool for THIS worker
+    from token_pool import get_token_pool
+    token_pool = get_token_pool()
+    
+    token_session = token_pool.get_session_for_worker(query_id)
+    if not token_session:
+        logger.error(f"[WORKER #{query_id}] Failed to get session from pool!")
+        return
+    
+    logger.info(f"[WORKER #{query_id}] Got session #{token_session.session_id} with UA: {token_session.user_agent[:50]}...")
+    
+    # Create Vinted instance for THIS worker (will use its own session)
+    vinted = Vinted(session=token_session.session)
+    logger.info(f"[WORKER #{query_id}] Created Vinted instance with dedicated session")
     
     while True:
         start_time = time.time()
@@ -284,18 +336,41 @@ def continuous_query_worker(query, queue, start_delay=0):
             
             elapsed = time.time() - start_time
             
+            # Report successful request to token pool
+            token_pool.report_success(token_session)
+            
             # Put items into queue
             if all_items:
                 queue.put((all_items, query_id))
                 logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items in {elapsed:.2f}s (next scan in {refresh_delay}s)")
+                # Update worker stats
+                update_worker_stats(query_id, 'success', len(all_items))
             else:
                 logger.info(f"[WORKER #{query_id}] 📭 No new items ({elapsed:.2f}s, next scan in {refresh_delay}s)")
+                # Update worker stats (successful scan, but no items)
+                update_worker_stats(query_id, 'success', 0)
                 
         except Exception as e:
             elapsed = time.time() - start_time
+            # Report error to token pool
+            token_pool.report_error(token_session)
+            
+            # Update worker stats (error)
+            update_worker_stats(query_id, 'error')
+            
             # Still need to get refresh_delay for sleep
             refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
             logger.error(f"[WORKER #{query_id}] ❌ Error after {elapsed:.2f}s: {e}")
+            
+            # Check if token session became invalid
+            if not token_session.is_valid:
+                logger.warning(f"[WORKER #{query_id}] Session #{token_session.session_id} is invalid! Getting new session...")
+                token_session = token_pool.get_session_for_worker(query_id)
+                if token_session:
+                    vinted = Vinted(session=token_session.session)
+                    logger.info(f"[WORKER #{query_id}] ✅ Got new session #{token_session.session_id}")
+                else:
+                    logger.error(f"[WORKER #{query_id}] Failed to get replacement session!")
         
         # Sleep for CURRENT refresh_delay (dynamically updated from DB!)
         time.sleep(refresh_delay)
@@ -306,19 +381,28 @@ def start_continuous_workers(queue):
     Start independent continuous workers for EACH query.
     
     Architecture:
-    - 72 queries = 72 independent threads
+    - N queries = N independent threads (e.g. 72 queries = 72 workers)
+    - Each worker has UNIQUE token & User-Agent from token pool
     - Each thread scans its own query dynamically (reads delay from DB)
     - All threads run in parallel forever
     - Query Refresh Delay applies to EACH query independently
     - Changes in Web UI apply IMMEDIATELY (no restart needed!)
+    - System automatically scales: add 100 queries → 100 workers + 100 tokens!
     
-    This is the TRUE parallel query processing!
+    This is the TRUE parallel query processing with maximum diversification!
     """
     try:
         logger.info(f"[WORKERS] 🚀 Starting INDEPENDENT workers for each query...")
         
         all_queries = db.get_queries()
-        logger.info(f"[WORKERS] Got {len(all_queries)} queries - creating {len(all_queries)} independent workers")
+        num_queries = len(all_queries)
+        logger.info(f"[WORKERS] Got {num_queries} queries - creating {num_queries} independent workers")
+        
+        # Initialize token pool with size matching number of queries (auto-scales!)
+        from token_pool import get_token_pool
+        token_pool = get_token_pool(target_size=num_queries)
+        logger.info(f"[WORKERS] 🎯 Token pool initialized with target_size={num_queries}")
+        logger.info(f"[WORKERS] Each worker will get unique token & User-Agent!")
         
         # Get INITIAL configuration (for logging only)
         refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)

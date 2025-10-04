@@ -217,59 +217,172 @@
 
 
 
-<!-- Migration Status Check -->
+<!-- Workers Status -->
 <div class="row mt-4">
     <div class="col-md-12">
-        <div class="card border-primary">
-            <div class="card-header bg-primary text-white d-flex align-items-center">
-                <i class="bi bi-database-check me-2"></i>
-                <h5 class="card-title mb-0">Delay Counter Status</h5>
-                <span class="badge bg-light text-dark ms-auto" id="migration-status-badge">Checking...</span>
+        <div class="card border-info">
+            <div class="card-header bg-info text-white d-flex align-items-center">
+                <i class="bi bi-cpu me-2"></i>
+                <h5 class="card-title mb-0">Workers Status (Last 3 Cycles)</h5>
+                <button type="button" class="btn btn-light btn-sm ms-auto" onclick="refreshWorkerStats()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-muted">Database Status</h6>
-                        <div class="mb-2">
-                            <small class="text-muted">Column found_at:</small>
-                            <span class="fw-bold ms-2" id="has-column-status">-</span>
+                <div id="workers-status-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
                         </div>
-                        <div class="mb-2">
-                            <small class="text-muted">Total items:</small>
-                            <span class="fw-bold ms-2" id="total-items-count">-</span>
-                        </div>
-                        <div class="mb-2">
-                            <small class="text-muted">Items with delay data:</small>
-                            <span class="fw-bold ms-2" id="items-with-delay">-</span>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="text-muted">Migration</h6>
-                        <div id="migration-instructions" style="display: none;" class="alert alert-warning">
-                            <strong>⚠️ Migration needed!</strong><br>
-                            Run this SQL on Railway PostgreSQL:<br>
-                            <code style="display: block; margin-top: 10px; padding: 10px; background: #f8f9fa;">
-ALTER TABLE items ADD COLUMN IF NOT EXISTS found_at NUMERIC;<br>
-UPDATE items SET found_at = timestamp WHERE found_at IS NULL;<br>
-CREATE INDEX IF NOT EXISTS idx_items_found_at ON items(found_at);
-                            </code>
-                            <a href="https://railway.app/project/101cc62f-b314-41d1-9b55-d58ae5c371ea" target="_blank" class="btn btn-warning btn-sm mt-2">
-                                <i class="bi bi-box-arrow-up-right"></i> Open Railway
-                            </a>
-                        </div>
-                        <div id="migration-success" style="display: none;" class="alert alert-success">
-                            <strong>✅ Migration applied!</strong><br>
-                            Delay counter is active and working.
-                        </div>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="checkMigrationStatus()">
-                            <i class="bi bi-arrow-clockwise"></i> Refresh Status
-                        </button>
+                        <p class="mt-2">Loading worker statistics...</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// Workers Status Functions
+function refreshWorkerStats() {
+    fetch('/api/worker_stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                updateWorkerStatus(data.workers);
+            } else {
+                console.error('Error fetching worker stats:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching worker stats:', error);
+            document.getElementById('workers-status-container').innerHTML = 
+                '<div class="alert alert-danger">Error loading worker statistics</div>';
+        });
+}
+
+function updateWorkerStatus(workers) {
+    const container = document.getElementById('workers-status-container');
+    
+    if (!workers || Object.keys(workers).length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">No worker data available yet</div>';
+        return;
+    }
+    
+    // Calculate statistics
+    const totalWorkers = Object.keys(workers).length;
+    const workersWithErrors = Object.values(workers).filter(w => w.total_errors > 0).length;
+    const workersWithItems = Object.values(workers).filter(w => w.total_items > 0).length;
+    
+    // Group workers by status
+    const successWorkers = [];
+    const errorWorkers = [];
+    const idleWorkers = [];
+    
+    Object.entries(workers).forEach(([workerId, stats]) => {
+        const recentScans = stats.recent_scans || [];
+        if (recentScans.length > 0) {
+            const lastScan = recentScans[recentScans.length - 1];
+            if (lastScan.status === 'error') {
+                errorWorkers.push({ id: workerId, ...stats });
+            } else if (lastScan.items > 0) {
+                successWorkers.push({ id: workerId, ...stats });
+            } else {
+                idleWorkers.push({ id: workerId, ...stats });
+            }
+        } else {
+            idleWorkers.push({ id: workerId, ...stats });
+        }
+    });
+    
+    // Build HTML
+    let html = `
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="alert alert-primary mb-0">
+                    <strong>${totalWorkers}</strong> Total Workers
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert alert-success mb-0">
+                    <strong>${workersWithItems}</strong> Found Items
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert alert-warning mb-0">
+                    <strong>${workersWithErrors}</strong> With Errors
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert alert-info mb-0">
+                    <strong>${idleWorkers.length}</strong> Idle
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Show workers with errors first
+    if (errorWorkers.length > 0) {
+        html += `<h6 class="text-danger mt-3">⚠️ Workers with Recent Errors (${errorWorkers.length}):</h6>`;
+        html += '<div class="row">';
+        errorWorkers.slice(0, 24).forEach(worker => {
+            const recentScans = worker.recent_scans.map(scan => {
+                const icon = scan.status === 'success' ? '✅' : '❌';
+                return `${icon} ${scan.time}`;
+            }).join(' ');
+            html += `
+                <div class="col-md-3 mb-2">
+                    <div class="card border-danger">
+                        <div class="card-body p-2">
+                            <small><strong>Worker #${worker.id}</strong></small><br>
+                            <small class="text-muted">Recent: ${recentScans}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        if (errorWorkers.length > 24) {
+            html += `<div class="col-12"><small class="text-muted">... and ${errorWorkers.length - 24} more</small></div>`;
+        }
+        html += '</div>';
+    }
+    
+    // Show successful workers
+    if (successWorkers.length > 0) {
+        html += `<h6 class="text-success mt-3">✅ Workers with Items (${successWorkers.length}):</h6>`;
+        html += '<div class="row">';
+        successWorkers.slice(0, 24).forEach(worker => {
+            const recentScans = worker.recent_scans.map(scan => {
+                const icon = scan.items > 0 ? `✅(${scan.items})` : '📭';
+                return `${icon}`;
+            }).join(' ');
+            html += `
+                <div class="col-md-3 mb-2">
+                    <div class="card border-success">
+                        <div class="card-body p-2">
+                            <small><strong>Worker #${worker.id}</strong> (${worker.total_items} items)</small><br>
+                            <small class="text-muted">Recent: ${recentScans}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        if (successWorkers.length > 24) {
+            html += `<div class="col-12"><small class="text-muted">... and ${successWorkers.length - 24} more</small></div>`;
+        }
+        html += '</div>';
+    }
+    
+    container.innerHTML = html;
+}
+
+// Auto-refresh worker stats every 30 seconds
+setInterval(refreshWorkerStats, 30000);
+
+// Initial load
+refreshWorkerStats();
+</script>
+
 
 <!-- Railway Auto-Redeploy Monitoring -->
 <div class="row mt-4">
@@ -544,7 +657,6 @@ CREATE INDEX IF NOT EXISTS idx_items_found_at ON items(found_at);
         setInterval(refreshRedeployStatus, 30000);
         
         // Auto-refresh status checks
-        checkMigrationStatus();  // Check migration status
         refreshProxyStatus();
         refreshRedeployStatus();
         
@@ -773,42 +885,6 @@ CREATE INDEX IF NOT EXISTS idx_items_found_at ON items(found_at);
     });
 
     // Migration Status Check
-    function checkMigrationStatus() {
-        fetch('/api/check_found_at')
-            .then(response => response.json())
-            .then(data => {
-                updateMigrationStatus(data);
-            })
-            .catch(error => {
-                console.error('Error checking migration status:', error);
-                document.getElementById('migration-status-badge').textContent = 'Error';
-                document.getElementById('migration-status-badge').className = 'badge bg-danger ms-auto';
-            });
-    }
-
-    function updateMigrationStatus(data) {
-        // Update badge
-        const badge = document.getElementById('migration-status-badge');
-        if (data.has_column) {
-            badge.textContent = 'Active ✅';
-            badge.className = 'badge bg-success ms-auto';
-            document.getElementById('migration-success').style.display = 'block';
-            document.getElementById('migration-instructions').style.display = 'none';
-        } else {
-            badge.textContent = 'Migration Needed ⚠️';
-            badge.className = 'badge bg-warning ms-auto';
-            document.getElementById('migration-success').style.display = 'none';
-            document.getElementById('migration-instructions').style.display = 'block';
-        }
-
-        // Update stats
-        document.getElementById('has-column-status').textContent = data.has_column ? '✅ Exists' : '❌ Missing';
-        document.getElementById('has-column-status').className = data.has_column ? 'fw-bold ms-2 text-success' : 'fw-bold ms-2 text-danger';
-        
-        document.getElementById('total-items-count').textContent = data.total_items || '0';
-        document.getElementById('items-with-delay').textContent = data.items_with_found_at || '0';
-    }
-
     // Proxy System Functions
     function refreshProxyStatus() {
         fetch('/proxy_status')

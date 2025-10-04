@@ -14,14 +14,20 @@ class Vinted:
     Example:
         >>> vinted = Vinted()
         >>> items = vinted.items.search("https://www.vinted.fr/catalog?search_text=shoes")
+        
+        >>> # Or with dedicated session from token pool:
+        >>> vinted = Vinted(session=my_session)
+        >>> items = vinted.items.search("https://www.vinted.fr/catalog?search_text=shoes")
     """
 
-    def __init__(self):
+    def __init__(self, session=None):
         """
         Initialize the Vinted class.
 
-        Args: None
+        Args:
+            session: Optional requests.Session instance with Bearer token already configured.
+                     If not provided, uses global requester instance (legacy mode).
         """
 
-        # Initialize Items instance (uses global requester with random proxy rotation)
-        self.items = Items()
+        # Initialize Items instance with optional dedicated session
+        self.items = Items(session=session)
