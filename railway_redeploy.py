@@ -482,48 +482,21 @@ class RailwayRedeployManager:
                 except Exception as e:
                     logger.warning(f"[REDEPLOY] Webhook failed: {e}")
             
-            # Метод 2: Записываем маркер и делаем принудительный выход
-            # Railway автоматически перезапустит упавший сервис
+            # ⚠️ ВАЖНО: НЕ КРАШИМ БОТ!
+            # Вместо краша просто сбрасываем счетчики и продолжаем работу
+            # Система защиты (прокси, rate limits) будет продолжать защищать бота
             logger.critical("[REDEPLOY] ════════════════════════════════════════")
-            logger.critical("[REDEPLOY] 💥 METHOD 2: Forcing application crash")
-            logger.critical("[REDEPLOY] Note: Railway should auto-restart the service")
-            logger.critical("[REDEPLOY] If bot doesn't restart - manual action required!")
+            logger.critical("[REDEPLOY] ⚠️  All redeploy methods failed")
+            logger.critical("[REDEPLOY] ✅ Error counters RESET - bot continues working")
+            logger.critical("[REDEPLOY] Note: Set RAILWAY_REDEPLOY_WEBHOOK env var for auto-redeploy")
+            logger.critical("[REDEPLOY] Manual redeploy may be required if errors persist")
             logger.critical("[REDEPLOY] ════════════════════════════════════════")
             
-            try:
-                with open('/tmp/redeploy_requested', 'w') as f:
-                    f.write(str(self.last_redeploy_time))
-                logger.info("[REDEPLOY] ✅ Created redeploy marker file: /tmp/redeploy_requested")
-            except Exception as e:
-                logger.warning(f"[REDEPLOY] ⚠️  Failed to create marker file: {e}")
-            
-            # Немедленный выход с ошибкой - Railway перезапустит
-            import signal
-            logger.critical("[REDEPLOY] 📤 Sending SIGTERM signal to own process...")
-            logger.critical(f"[REDEPLOY] Process ID: {os.getpid()}")
-            os.kill(os.getpid(), signal.SIGTERM)
-            
-            # Если SIGTERM не сработал, через 2 секунды делаем hard exit
-            import threading
-            def delayed_exit():
-                import time
-                time.sleep(2)
-                logger.critical("[REDEPLOY] Hard exit...")
-                os._exit(1)
-            
-            thread = threading.Thread(target=delayed_exit)
-            thread.daemon = True
-            thread.start()
-            
-            return True
+            return False
             
         except Exception as e:
             logger.error(f"[REDEPLOY] Emergency redeploy failed: {e}")
-            # Последняя попытка - hard crash
-            try:
-                os._exit(1)
-            except:
-                return False
+            return False
     
     def _reset_error_tracking(self):
         """Сбросить отслеживание ошибок после успешного редеплоя"""
