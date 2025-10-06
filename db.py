@@ -1078,17 +1078,48 @@ def get_api_requests_count():
 
 
 def increment_api_requests():
-    """Increment API requests counter"""
+    """Increment API requests counter (ATOMIC for thread-safety)"""
+    conn = None
     try:
-        current_count = get_api_requests_count()
-        new_count = current_count + 1
-        set_parameter('vinted_api_requests', str(new_count))
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
+        
+        # ATOMIC increment - prevents race conditions in multi-threaded environment!
+        if db_type == 'postgresql':
+            # PostgreSQL: atomic increment
+            cursor.execute("""
+                UPDATE parameters 
+                SET value = (CAST(value AS INTEGER) + 1)::TEXT 
+                WHERE key = %s
+                RETURNING CAST(value AS INTEGER)
+            """, ('vinted_api_requests',))
+            result = cursor.fetchone()
+            new_count = result[0] if result else 1
+        else:
+            # SQLite: atomic increment
+            cursor.execute("""
+                UPDATE parameters 
+                SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) 
+                WHERE key = ?
+            """, ('vinted_api_requests',))
+            # Get new value
+            cursor.execute("SELECT value FROM parameters WHERE key = ?", ('vinted_api_requests',))
+            result = cursor.fetchone()
+            new_count = int(result[0]) if result else 1
+        
+        conn.commit()
         
         # Log every 10 requests for diagnostics
         if new_count % 10 == 0:
             logger.info(f"[API_COUNTER] 📊 Total API requests: {new_count}")
+            
     except Exception as e:
         logger.warning(f"[API_COUNTER] Failed to increment: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
 
 
 def reset_api_requests():
