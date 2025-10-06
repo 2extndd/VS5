@@ -486,82 +486,91 @@ def clear_item_queue(items_queue, new_items_queue):
     """
     Process items from the items_queue.
     This function is scheduled to run frequently.
+    
+    🔥 КРИТИЧНО: Обрабатывает ВСЕ элементы в очереди за один вызов!
+    Иначе при 72 воркерах очередь растет быстрее, чем обрабатывается!
     """
-    logger.info(f"[DEBUG] clear_item_queue called - queue empty: {items_queue.empty()} (queue id: {id(items_queue)})")
-    if not items_queue.empty():
-        logger.info(f"[DEBUG] Found items in queue! Getting them...")
-        data, query_id = items_queue.get()
-        logger.info(f"[DEBUG] Got {len(data)} items from queue for query_id {query_id}")
-        logger.info(f"[DEBUG] Starting to process {len(data)} items...")
-        for item in reversed(data):
-            logger.info(f"[DEBUG] Processing item {item.id}: {item.title[:50]}...")
+    processed_count = 0
+    
+    # Обрабатываем ВСЕ элементы в очереди (до 100 за раз для безопасности)
+    while not items_queue.empty() and processed_count < 100:
+        try:
+            data, query_id = items_queue.get_nowait()
+            processed_count += 1
+            
+            logger.debug(f"[QUEUE] Processing batch #{processed_count}: {len(data)} items from query #{query_id}")
+            
+            for item in reversed(data):
+                logger.debug(f"[QUEUE] Processing item {item.id}: {item.title[:50]}...")
 
-            # Check if item already exists in database
-            if db.is_item_in_db_by_id(item.id):
-                logger.info(f"[DEBUG] Item {item.id} already exists in database, skipping...")
-                continue
-                
-            # TEMPORARILY DISABLE TIME FILTER - accept all items but check for duplicates
-            if True:  # Accept all items for now
-                logger.info(f"[DEBUG] Creating message for item {item.id}...")
-                try:
-                    # Calculate delay between publication and discovery
-                    import time
-                    found_at = time.time()  # Record when bot found this item
-                    delay_str = calculate_delay(item.raw_timestamp, found_at)
+                # Check if item already exists in database
+                if db.is_item_in_db_by_id(item.id):
+                    logger.debug(f"[QUEUE] Item {item.id} already exists in database, skipping...")
+                    continue
                     
-                    # Format price with delay
-                    price_text = f"💶{str(item.price)} {item.currency}"
-                    if delay_str:
-                        price_text += f" ({delay_str})"
-                    
-                    # We create the message with conditional size display
-                    if item.size_title and item.size_title.strip():
-                        # Format message with size
-                        content = f"<b>{item.title}</b>\n<b>{price_text}</b>\n⛓️ {item.size_title}\n{item.brand_title}"
-                    else:
-                        # Format message without size line
-                        content = f"<b>{item.title}</b>\n<b>{price_text}</b>\n{item.brand_title}"
-                    
-                    # Add invisible image link if photo exists
-                    if item.photo:
-                        content += f"\n<a href='{item.photo}'>&#8205;</a>"
-                    logger.info(f"[DEBUG] Message created successfully for item {item.id}")
-                    
-                    # IMPORTANT: Save to DB FIRST, then send to Telegram
-                    # This prevents items appearing in TG but not in Web UI if DB fails
-                    
-                    # Add the item to the db (found_at already calculated above for delay)
-                    logger.info(f"[DEBUG] Adding item to database: {item.id}")
-                    db.add_item_to_db(id=item.id, title=item.title, query_id=query_id, price=item.price, 
-                                      timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency, 
-                                      brand_title=item.brand_title, found_at=found_at)
-                    logger.info(f"[DEBUG] Item {item.id} successfully added to database!")
-                    
-                    # Update the query's last_found timestamp
-                    logger.info(f"[DEBUG] Updating last_found for query {query_id}")
-                    db.update_query_last_found(query_id, item.raw_timestamp)
-                    logger.info(f"[DEBUG] Query {query_id} last_found updated!")
-                    
-                    # Get thread_id for this query
-                    thread_id = None
+                # TEMPORARILY DISABLE TIME FILTER - accept all items but check for duplicates
+                if True:  # Accept all items for now
+                    logger.debug(f"[QUEUE] Creating message for item {item.id}...")
                     try:
-                        # Get query details to extract thread_id
-                        current_query = next((q for q in db.get_queries() if q[0] == query_id), None)
-                        if current_query and len(current_query) > 4:
-                            thread_id = current_query[4]  # thread_id is the 5th element (index 4)
+                        # Calculate delay between publication and discovery
+                        import time
+                        found_at = time.time()  # Record when bot found this item
+                        delay_str = calculate_delay(item.raw_timestamp, found_at)
+                        
+                        # Format price with delay
+                        price_text = f"💶{str(item.price)} {item.currency}"
+                        if delay_str:
+                            price_text += f" ({delay_str})"
+                        
+                        # We create the message with conditional size display
+                        if item.size_title and item.size_title.strip():
+                            # Format message with size
+                            content = f"<b>{item.title}</b>\n<b>{price_text}</b>\n⛓️ {item.size_title}\n{item.brand_title}"
+                        else:
+                            # Format message without size line
+                            content = f"<b>{item.title}</b>\n<b>{price_text}</b>\n{item.brand_title}"
+                        
+                        # Add invisible image link if photo exists
+                        if item.photo:
+                            content += f"\n<a href='{item.photo}'>&#8205;</a>"
+                        
+                        # IMPORTANT: Save to DB FIRST, then send to Telegram
+                        # This prevents items appearing in TG but not in Web UI if DB fails
+                        
+                        # Add the item to the db (found_at already calculated above for delay)
+                        db.add_item_to_db(id=item.id, title=item.title, query_id=query_id, price=item.price, 
+                                          timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency, 
+                                          brand_title=item.brand_title, found_at=found_at)
+                        
+                        # Update the query's last_found timestamp
+                        db.update_query_last_found(query_id, item.raw_timestamp)
+                        
+                        # Get thread_id for this query
+                        thread_id = None
+                        try:
+                            # Get query details to extract thread_id
+                            current_query = next((q for q in db.get_queries() if q[0] == query_id), None)
+                            if current_query and len(current_query) > 4:
+                                thread_id = current_query[4]  # thread_id is the 5th element (index 4)
+                        except Exception as e:
+                            logger.warning(f"Could not get thread_id for query {query_id}: {e}")
+                        
+                        # NOW add to Telegram queue (only after successful DB save)
+                        new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id, item.photo))
+                        
+                        logger.info(f"[QUEUE] ✅ NEW ITEM: {item.title} ({delay_str})")
+                        
                     except Exception as e:
-                        logger.warning(f"Could not get thread_id for query {query_id}: {e}")
-                    
-                    # NOW add to Telegram queue (only after successful DB save)
-                    logger.info(f"[DEBUG] Adding item to Telegram queue: {item.title} (thread_id: {thread_id}, photo: {item.photo})")
-                    new_items_queue.put((content, item.url, "Open Vinted", None, None, thread_id, item.photo))
-                    logger.info(f"[DEBUG] Item added to new_items_queue successfully")
-                    
-                except Exception as e:
-                    logger.error(f"[ERROR] Failed to process item {item.id}: {e}")
-                    import traceback
-                    logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
+                        logger.error(f"[ERROR] Failed to process item {item.id}: {e}")
+                        import traceback
+                        logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
+        
+        except Exception as e:
+            logger.error(f"[QUEUE] Error processing queue batch: {e}")
+            break
+    
+    if processed_count > 0:
+        logger.info(f"[QUEUE] ✅ Processed {processed_count} batches from queue")
 
 
 def check_version():
