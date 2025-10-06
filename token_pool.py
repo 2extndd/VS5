@@ -317,24 +317,31 @@ class TokenPool:
             # Remove invalid sessions
             self.sessions = [s for s in self.sessions if s.is_valid]
             
-            # If we have fewer sessions than target, create a new one
-            if len(self.sessions) < self.target_size and len(self.sessions) < self.max_size:
-                logger.info(f"[TOKEN_POOL] Creating new session ({len(self.sessions)}/{self.target_size})...")
+            # 🔥 КРИТИЧНО: Создаем ПО ОДНОМУ токену для КАЖДОГО воркера!
+            # Если воркеров больше чем токенов - создаем новые токены
+            # Это гарантирует что каждый воркер получит УНИКАЛЬНЫЙ токен
+            while len(self.sessions) <= worker_id and len(self.sessions) < self.max_size:
+                logger.info(f"[TOKEN_POOL] Worker #{worker_id} needs token - creating session #{len(self.sessions) + 1}/{self.target_size}...")
                 # 🔥 ВАЖНО: Используем метод С ПРОКСИ, иначе ban!
                 import proxies
                 proxy_dict = proxies.get_random_proxy()
                 new_session = self._create_new_session_with_proxy(proxy_dict)
                 if new_session:
                     self.sessions.append(new_session)
+                    logger.info(f"[TOKEN_POOL] ✅ Created session #{new_session.session_id} for worker #{worker_id}")
+                else:
+                    logger.error(f"[TOKEN_POOL] ❌ Failed to create session for worker #{worker_id}")
+                    break
             
             # If no sessions available, return None (worker will retry)
             if not self.sessions:
                 logger.error(f"[TOKEN_POOL] No valid sessions available!")
                 return None
             
-            # Assign session: try to give each worker a dedicated session
-            # Use modulo to map worker_id to session index
-            session_idx = worker_id % len(self.sessions)
+            # 🔥 КРИТИЧНО: Каждый воркер получает СВОЙ токен по индексу
+            # Worker 0 → Token 0, Worker 1 → Token 1, и т.д.
+            # Если воркеров больше чем токенов - используем модуло
+            session_idx = min(worker_id, len(self.sessions) - 1)
             session = self.sessions[session_idx]
             
             logger.debug(f"[TOKEN_POOL] Worker #{worker_id} → Session #{session.session_id} (UA: {session.user_agent[:30]}...)")
