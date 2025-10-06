@@ -383,10 +383,10 @@ class TokenPool:
 # Global token pool instance
 _global_token_pool = None
 
-def get_token_pool(target_size=72):
+def get_token_pool(target_size=72, prewarm=False):
     """Get or create global token pool instance"""
     global _global_token_pool
     if _global_token_pool is None:
-        _global_token_pool = TokenPool(target_size=target_size)
+        _global_token_pool = TokenPool(target_size=target_size, prewarm=prewarm)
     return _global_token_pool
 
