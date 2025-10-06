@@ -436,10 +436,12 @@ def start_continuous_workers(queue):
         logger.info(f"[WORKERS] Got {num_queries} queries - creating {num_queries} independent workers")
         
         # Initialize token pool with size matching number of queries (auto-scales!)
+        # 🔥 ВАЖНО: Pre-warming делается В ФОНЕ чтобы не блокировать Web UI!
         from token_pool import get_token_pool
-        token_pool = get_token_pool(target_size=num_queries)
+        token_pool = get_token_pool(target_size=num_queries, prewarm=False)  # prewarm=False!
         logger.info(f"[WORKERS] 🎯 Token pool initialized with target_size={num_queries}")
-        logger.info(f"[WORKERS] Each worker will get unique token & User-Agent!")
+        logger.info(f"[WORKERS] ⚡ Pre-warming will happen in background as workers request tokens!")
+        logger.info(f"[WORKERS] 🌐 Web UI can start IMMEDIATELY without waiting!")
         
         # Get INITIAL configuration (for logging only)
         refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
