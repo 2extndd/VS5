@@ -636,7 +636,11 @@ class RailwayRedeployManager:
                 def delayed_exit():
                     time.sleep(3)
                     logger.critical("[REDEPLOY] 💥 FORCING EXIT NOW...")
-                    os._exit(1)  # Принудительный выход - Railway перезапустит
+                    # ВАЖНО: используем exit code 143 (SIGTERM) вместо 1
+                    # Exit code 143 = graceful shutdown, Railway его лучше воспринимает
+                    # Альтернатива: отправить себе SIGTERM вместо os._exit
+                    import signal
+                    os.kill(os.getpid(), signal.SIGTERM)
                 
                 thread = threading.Thread(target=delayed_exit)
                 thread.daemon = True

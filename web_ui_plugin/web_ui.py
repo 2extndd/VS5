@@ -1639,6 +1639,35 @@ def redeploy_status():
         logger.error(f"Error getting redeploy status: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/health')
+@app.route('/healthcheck')
+def healthcheck():
+    """
+    Healthcheck endpoint for Railway monitoring.
+    Returns 200 OK if the service is running properly.
+    This prevents Railway from treating planned restarts as crashes.
+    """
+    try:
+        # Check if database is accessible
+        db.get_parameter("query_refresh_delay")
+        
+        # Check if workers are running
+        worker_count = len(db.get_queries())
+        
+        return jsonify({
+            "status": "healthy",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "workers": worker_count,
+            "service": "vinted-bot"
+        }), 200
+    except Exception as e:
+        logger.error(f"Healthcheck failed: {e}")
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "service": "vinted-bot"
+        }), 503
+
 @app.route('/proxy_status')
 def proxy_status():
     """API endpoint для мониторинга системы прокси"""
