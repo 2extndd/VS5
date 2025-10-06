@@ -230,7 +230,10 @@ class TokenPool:
             session.headers["Authorization"] = f"Bearer {access_token}"
             
             token_session = TokenSession(session_id, session, access_token, user_agent)
-            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} | Token: {access_token[:20]}... | UA: {user_agent.split('(')[0].strip()[:25]}")
+            # Show UNIQUE part of token (middle chars) and full browser info
+            token_preview = f"{access_token[:10]}...{access_token[-10:]}"  # First 10 + last 10 chars
+            ua_short = user_agent[:80] if len(user_agent) <= 80 else user_agent[:77] + "..."
+            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} | Token: {token_preview} | UA: {ua_short}")
             
             return token_session
             
@@ -305,7 +308,9 @@ class TokenPool:
             session.headers["Authorization"] = f"Bearer {access_token}"
             
             token_session = TokenSession(session_id, session, access_token, user_agent)
-            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} created | UA: {user_agent.split('(')[0].strip()[:30]}")
+            # Show full browser info to see unique User-Agent
+            ua_short = user_agent[:80] if len(user_agent) <= 80 else user_agent[:77] + "..."
+            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} created | UA: {ua_short}")
             
             return token_session
             
