@@ -351,7 +351,6 @@ def index():
             delay_str = None
             if len(item) > 8 and item[8]:  # item[8] is found_at
                 delay_str = calculate_delay(item[4], item[8])
-                logger.info(f"[DEBUG] Calculated delay: {delay_str} (published: {item[4]}, found: {item[8]})")
             
             formatted_items.append({
                 'id': str(item[0]) if item[0] else 'Unknown',
