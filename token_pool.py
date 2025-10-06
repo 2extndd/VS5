@@ -314,9 +314,6 @@ class TokenPool:
             TokenSession
         """
         with self.lock:
-            # Remove invalid sessions
-            self.sessions = [s for s in self.sessions if s.is_valid]
-            
             # 🔥 КРИТИЧНО: Создаем ПО ОДНОМУ токену для КАЖДОГО воркера!
             # Если воркеров больше чем токенов - создаем новые токены
             # Это гарантирует что каждый воркер получит УНИКАЛЬНЫЙ токен
@@ -340,9 +337,24 @@ class TokenPool:
             
             # 🔥 КРИТИЧНО: Каждый воркер получает СВОЙ токен по индексу
             # Worker 0 → Token 0, Worker 1 → Token 1, и т.д.
-            # Если воркеров больше чем токенов - используем модуло
             session_idx = min(worker_id, len(self.sessions) - 1)
             session = self.sessions[session_idx]
+            
+            # 🔥 КРИТИЧНО: Если токен невалиден - ЗАМЕНЯЕМ его на новый НА МЕСТЕ!
+            # Это сохраняет привязку worker_id → session_idx
+            if not session.is_valid:
+                logger.warning(f"[TOKEN_POOL] Worker #{worker_id} has INVALID token (session #{session.session_id}) - REPLACING on the spot!")
+                import proxies
+                proxy_dict = proxies.get_random_proxy()
+                new_session = self._create_new_session_with_proxy(proxy_dict)
+                if new_session:
+                    # Заменяем невалидный токен НОВЫМ на том же индексе
+                    self.sessions[session_idx] = new_session
+                    session = new_session
+                    logger.info(f"[TOKEN_POOL] ✅ Worker #{worker_id} got NEW token (session #{new_session.session_id}) at same index!")
+                else:
+                    logger.error(f"[TOKEN_POOL] ❌ Failed to create replacement token for worker #{worker_id}!")
+                    # Оставляем старый невалидный токен - воркер попробует позже
             
             logger.debug(f"[TOKEN_POOL] Worker #{worker_id} → Session #{session.session_id} (UA: {session.user_agent[:30]}...)")
             return session

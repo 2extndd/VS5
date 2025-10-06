@@ -331,6 +331,16 @@ def continuous_query_worker(query, queue, start_delay=0):
         refresh_delay = int(db.get_parameter("query_refresh_delay") or 60)
         items_per_query = int(db.get_parameter("items_per_query") or 20)
         
+        # 🔥 КРИТИЧНО: Проверяем токен ПЕРЕД каждым сканированием!
+        # Если токен стал невалидным - token_pool автоматически заменит его
+        if not token_session.is_valid:
+            logger.warning(f"[WORKER #{query_id}] Token invalid - getting replacement...")
+            new_session = token_pool.get_session_for_worker(query_id)
+            if new_session:
+                token_session = new_session
+                vinted = Vinted(session=token_session.session)
+                logger.info(f"[WORKER #{query_id}] ✅ Got replacement token #{token_session.session_id}")
+        
         try:
             # Scan this query using THIS worker's dedicated Vinted instance
             search_result = vinted.items.search(query_url, nbr_items=items_per_query)
@@ -398,15 +408,8 @@ def continuous_query_worker(query, queue, start_delay=0):
             
             logger.error(f"[WORKER #{query_id}] ❌ Unexpected error after {elapsed:.2f}s: {e} - will retry in {refresh_delay}s")
 
-            # Check if token session became invalid
-            if not token_session.is_valid:
-                logger.warning(f"[WORKER #{query_id}] Session #{token_session.session_id} is invalid! Getting new session...")
-                token_session = token_pool.get_session_for_worker(query_id)
-                if token_session:
-                    vinted = Vinted(session=token_session.session)
-                    logger.info(f"[WORKER #{query_id}] ✅ Got new session #{token_session.session_id}")
-                else:
-                    logger.error(f"[WORKER #{query_id}] Failed to get replacement session!")
+            # Token pool automatically replaces invalid tokens on next get_session_for_worker() call
+            # No need to manually check is_valid here - will be checked on next iteration
         
         # 🔥 КРИТИЧНО: Sleep ВСЕГДА с одинаковой задержкой
         # refresh_delay определен ДО try-except, поэтому ВСЕГДА доступен
