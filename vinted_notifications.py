@@ -237,19 +237,30 @@ if __name__ == "__main__":
     # Start INDEPENDENT continuous workers for each query (NO SCHEDULER!)
     logger.info("[DEBUG] Starting INDEPENDENT workers for each query...")
     logger.info(f"[DEBUG] Each query will scan every {current_query_refresh_delay} seconds in PARALLEL")
+    
+    # Get number of queries to show in logs
+    all_queries_count = len(db.get_queries())
+    logger.info(f"[DEBUG] 📊 Total queries in DB: {all_queries_count}")
+    logger.info(f"[DEBUG] 📊 Expected workers: {all_queries_count}")
+    logger.info(f"[DEBUG] 📊 Expected API requests per cycle: {all_queries_count}")
+    logger.info(f"[DEBUG] 📊 Refresh delay: {current_query_refresh_delay}s")
+    logger.info(f"[DEBUG] 📊 Expected requests per minute: ~{int(60 / current_query_refresh_delay * all_queries_count)}")
+    
     workers_executor = core.start_continuous_workers(items_queue)
     if workers_executor:
         logger.info(f"[DEBUG] ✅ Independent workers started successfully!")
+        logger.info(f"[DEBUG] ✅ {all_queries_count} workers are now running in parallel!")
     else:
         logger.error(f"[DEBUG] ❌ Failed to start independent workers!")
     
     # Start item processor scheduler - THIS WAS MISSING!
     logger.info("[DEBUG] Starting item processor scheduler...")
     processor_scheduler = BackgroundScheduler()
-    processor_scheduler.add_job(core.clear_item_queue, 'interval', seconds=1, 
+    # Ускоряем обработку очереди с 1 сек до 0.1 сек для мгновенной отправки
+    processor_scheduler.add_job(core.clear_item_queue, 'interval', seconds=0.1, 
                                args=[items_queue, new_items_queue], name="item_processor")
     processor_scheduler.start()
-    logger.info("[DEBUG] Item processor scheduler started!")
+    logger.info("[DEBUG] Item processor scheduler started (0.1s interval for instant processing)!")
     
     # Start monitor scheduler  
     monitor_scheduler = BackgroundScheduler()

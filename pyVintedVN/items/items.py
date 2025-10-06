@@ -100,8 +100,9 @@ class Items:
                 try:
                     import db
                     db.increment_api_requests()
-                except:
-                    pass
+                    logger.debug(f"[API_COUNTER] ✅ API request counted (dedicated session)")
+                except Exception as e:
+                    logger.warning(f"[API_COUNTER] ⚠️ Failed to increment counter: {e}")
             else:
                 # Legacy mode: use global requester
                 from pyVintedVN.requester import requester as requester_instance

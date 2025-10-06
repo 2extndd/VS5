@@ -1081,9 +1081,14 @@ def increment_api_requests():
     """Increment API requests counter"""
     try:
         current_count = get_api_requests_count()
-        set_parameter('vinted_api_requests', str(current_count + 1))
-    except Exception:
-        pass
+        new_count = current_count + 1
+        set_parameter('vinted_api_requests', str(new_count))
+        
+        # Log every 10 requests for diagnostics
+        if new_count % 10 == 0:
+            logger.info(f"[API_COUNTER] 📊 Total API requests: {new_count}")
+    except Exception as e:
+        logger.warning(f"[API_COUNTER] Failed to increment: {e}")
 
 
 def reset_api_requests():

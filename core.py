@@ -14,6 +14,10 @@ logger = get_logger(__name__)
 _worker_stats = {}
 _worker_stats_lock = threading.Lock()
 
+# Global counter for active workers
+_active_workers_count = 0
+_active_workers_lock = threading.Lock()
+
 def update_worker_stats(worker_id, status, items_count=0):
     """Update global worker statistics"""
     with _worker_stats_lock:
@@ -48,6 +52,27 @@ def get_worker_stats():
     """Get worker statistics for all workers"""
     with _worker_stats_lock:
         return dict(_worker_stats)
+
+def increment_active_workers():
+    """Increment active workers counter"""
+    global _active_workers_count
+    with _active_workers_lock:
+        _active_workers_count += 1
+        logger.info(f"[WORKERS] 📈 Active workers count: {_active_workers_count}")
+        return _active_workers_count
+
+def decrement_active_workers():
+    """Decrement active workers counter"""
+    global _active_workers_count
+    with _active_workers_lock:
+        _active_workers_count -= 1
+        logger.warning(f"[WORKERS] 📉 Active workers count: {_active_workers_count}")
+        return _active_workers_count
+
+def get_active_workers_count():
+    """Get current active workers count"""
+    with _active_workers_lock:
+        return _active_workers_count
 
 
 def calculate_delay(published_timestamp, found_timestamp, max_hours=1):
@@ -307,17 +332,30 @@ def continuous_query_worker(query, queue, start_delay=0):
         time.sleep(start_delay)
     
     logger.info(f"[WORKER #{query_id}] 🚀 Started - will use unique token & User-Agent")
+    logger.info(f"[WORKER #{query_id}] 📊 Worker lifecycle: STARTED")
     
     # Get dedicated session from token pool for THIS worker
     from token_pool import get_token_pool
     token_pool = get_token_pool()
     
-    token_session = token_pool.get_session_for_worker(query_id)
+    # Retry getting token up to 5 times (tokens might not be ready yet)
+    token_session = None
+    for retry in range(5):
+        token_session = token_pool.get_session_for_worker(query_id)
+        if token_session:
+            break
+        logger.warning(f"[WORKER #{query_id}] Failed to get session, retry {retry+1}/5 in 2s...")
+        time.sleep(2)
+    
     if not token_session:
-        logger.error(f"[WORKER #{query_id}] Failed to get session from pool!")
+        logger.error(f"[WORKER #{query_id}] ❌ CRITICAL: Failed to get session after 5 retries! Worker TERMINATED!")
+        decrement_active_workers()  # Worker failed to start
         return
     
     logger.info(f"[WORKER #{query_id}] Got session #{token_session.session_id} with UA: {token_session.user_agent[:50]}...")
+    
+    # Worker successfully started!
+    increment_active_workers()
     
     # Create Vinted instance for THIS worker (will use its own session)
     vinted = Vinted(session=token_session.session)
@@ -343,7 +381,9 @@ def continuous_query_worker(query, queue, start_delay=0):
         
         try:
             # Scan this query using THIS worker's dedicated Vinted instance
+            logger.debug(f"[WORKER #{query_id}] 🔍 Starting Vinted API request...")
             search_result = vinted.items.search(query_url, nbr_items=items_per_query)
+            logger.debug(f"[WORKER #{query_id}] ✅ Vinted API request completed")
 
             elapsed = time.time() - start_time
 
@@ -370,7 +410,73 @@ def continuous_query_worker(query, queue, start_delay=0):
                 # Update worker stats (error)
                 update_worker_stats(query_id, 'error')
 
-                logger.error(f"[WORKER #{query_id}] ❌ HTTP {status_code} error after {elapsed:.2f}s - will retry in {refresh_delay}s")
+                # 🔥 КРИТИЧНО: При 403/401 - НЕМЕДЛЕННО получить новый токен и повторить!
+                if status_code in (403, 401):
+                    logger.warning(f"[WORKER #{query_id}] 🔄 Attempting IMMEDIATE retry with new token...")
+                    
+                    # Попытка получить новый токен и повторить запрос (до 3 попыток)
+                    retry_success = False
+                    for retry_attempt in range(3):
+                        # Получаем новый токен
+                        logger.info(f"[WORKER #{query_id}] 🔑 Getting new token (retry {retry_attempt + 1}/3)...")
+                        new_session = token_pool.get_session_for_worker(query_id)
+                        
+                        if not new_session:
+                            logger.warning(f"[WORKER #{query_id}] Failed to get new token for retry {retry_attempt + 1}/3")
+                            time.sleep(1)  # Короткая пауза перед следующей попыткой
+                            continue
+                        
+                        # Обновляем токен и сессию
+                        token_session = new_session
+                        vinted = Vinted(session=token_session.session)
+                        logger.info(f"[WORKER #{query_id}] ✅ Got new token #{token_session.session_id}, retrying request...")
+                        
+                        # Повторяем запрос с новым токеном
+                        retry_start = time.time()
+                        retry_result = vinted.items.search(query_url, nbr_items=items_per_query)
+                        retry_elapsed = time.time() - retry_start
+                        
+                        # Проверяем результат retry
+                        if isinstance(retry_result, tuple) and len(retry_result) == 2:
+                            retry_response, retry_status = retry_result
+                            logger.warning(f"[WORKER #{query_id}] Retry {retry_attempt + 1}/3 failed with HTTP {retry_status} ({retry_elapsed:.2f}s)")
+                            token_pool.report_error(token_session)
+                            
+                            # Если снова 403/401 - пробуем следующий токен
+                            if retry_status in (403, 401):
+                                continue
+                            else:
+                                # Другая ошибка - выходим из retry-цикла
+                                break
+                        else:
+                            # Успех! Обрабатываем результат
+                            search_result = retry_result
+                            elapsed = retry_elapsed
+                            retry_success = True
+                            logger.info(f"[WORKER #{query_id}] 🎉 Retry successful with new token after {retry_elapsed:.2f}s!")
+                            token_pool.report_success(token_session)
+                            break
+                    
+                    # Если retry успешен - обрабатываем результат как обычно (переходим к блоку else ниже)
+                    if not retry_success:
+                        logger.error(f"[WORKER #{query_id}] ❌ All 3 retry attempts failed - will wait {refresh_delay}s before next scan")
+                    else:
+                        # Перенаправляем в success блок
+                        all_items = search_result
+                        token_pool.report_success(token_session)
+                        from railway_redeploy import report_success
+                        report_success()
+                        
+                        if all_items:
+                            queue.put((all_items, query_id))
+                            logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items after retry in {elapsed:.2f}s (next scan in {refresh_delay}s)")
+                            update_worker_stats(query_id, 'success', len(all_items))
+                        else:
+                            logger.info(f"[WORKER #{query_id}] 📭 No new items after retry ({elapsed:.2f}s, next scan in {refresh_delay}s)")
+                            update_worker_stats(query_id, 'success', 0)
+                else:
+                    # Для 429 и других ошибок - просто ждем refresh_delay
+                    logger.error(f"[WORKER #{query_id}] ❌ HTTP {status_code} error after {elapsed:.2f}s - will retry in {refresh_delay}s")
             else:
                 # Successful scan - got items list
                 all_items = search_result
@@ -437,6 +543,8 @@ def start_continuous_workers(queue):
         all_queries = db.get_queries()
         num_queries = len(all_queries)
         logger.info(f"[WORKERS] Got {num_queries} queries - creating {num_queries} independent workers")
+        logger.info(f"[WORKERS] 📊 ARCHITECTURE: {num_queries} queries = {num_queries} parallel threads")
+        logger.info(f"[WORKERS] 📊 Each worker will make API requests independently")
         
         # Initialize token pool with size matching number of queries (auto-scales!)
         # 🔥 ВАЖНО: Pre-warming делается В ФОНЕ чтобы не блокировать Web UI!
@@ -460,13 +568,32 @@ def start_continuous_workers(queue):
         
         logger.info(f"[WORKERS] 🚀 Starting ALL {len(all_queries)} workers INSTANTLY (no stagger delay)!")
         
+        # Reset active workers counter
+        global _active_workers_count
+        with _active_workers_lock:
+            _active_workers_count = 0
+        
         for idx, query in enumerate(all_queries):
             # No delay - all workers start at once with ready tokens!
             executor.submit(continuous_query_worker, query, queue, start_delay=0)
         
-        logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers started IMMEDIATELY!")
+        logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers SUBMITTED to executor!")
+        logger.info(f"[WORKERS] ⏳ Waiting 10 seconds for workers to initialize and report...")
+        
+        # Wait for workers to initialize and report their status
+        time.sleep(10)
+        
+        active_count = get_active_workers_count()
+        logger.info(f"[WORKERS] 📊 FINAL COUNT: {active_count}/{len(all_queries)} workers are ACTIVE!")
+        
+        if active_count < len(all_queries):
+            logger.error(f"[WORKERS] ⚠️ WARNING: {len(all_queries) - active_count} workers FAILED TO START!")
+            logger.error(f"[WORKERS] ⚠️ Expected {len(all_queries)} workers, but only {active_count} are running!")
+        else:
+            logger.info(f"[WORKERS] ✅ All {active_count} workers are running successfully!")
+        
         logger.info(f"[WORKERS] 🔥 All queries scanning in TRUE PARALLEL with DYNAMIC config!")
-        logger.info(f"[WORKERS] ⚡ No startup delay - tokens were pre-warmed!")
+        logger.info(f"[WORKERS] ⚡ Expected API requests per cycle: {active_count} requests every {refresh_delay}s")
         
         # Keep executor alive
         return executor
@@ -496,6 +623,11 @@ def clear_item_queue(items_queue, new_items_queue):
     Иначе при 72 воркерах очередь растет быстрее, чем обрабатывается!
     """
     processed_count = 0
+    
+    # 🔥 КРИТИЧНО: Кешируем queries ОДИН РАЗ перед обработкой!
+    # Иначе db.get_queries() вызывается для КАЖДОЙ вещи (1440+ раз за цикл!)
+    all_queries_cache = db.get_queries()
+    logger.debug(f"[QUEUE] Cached {len(all_queries_cache)} queries for fast lookup")
     
     # Обрабатываем ВСЕ элементы в очереди (до 100 за раз для безопасности)
     while not items_queue.empty() and processed_count < 100:
@@ -550,11 +682,11 @@ def clear_item_queue(items_queue, new_items_queue):
                         # Update the query's last_found timestamp
                         db.update_query_last_found(query_id, item.raw_timestamp)
                         
-                        # Get thread_id for this query
+                        # Get thread_id for this query from CACHED queries
                         thread_id = None
                         try:
-                            # Get query details to extract thread_id
-                            current_query = next((q for q in db.get_queries() if q[0] == query_id), None)
+                            # Use cached queries instead of calling db.get_queries() for EVERY item!
+                            current_query = next((q for q in all_queries_cache if q[0] == query_id), None)
                             if current_query and len(current_query) > 4:
                                 thread_id = current_query[4]  # thread_id is the 5th element (index 4)
                         except Exception as e:

@@ -134,8 +134,8 @@ class SimpleTelegramSender:
                         logger.warning(f"⚠️ Invalid queue item format: {queue_item}")
                         
                 else:
-                    # Queue is empty, wait a bit
-                    time.sleep(1)
+                    # Queue is empty, wait a bit (0.1s instead of 1s for faster response)
+                    time.sleep(0.1)
                     
             except Exception as e:
                 logger.error(f"❌ Error in monitoring loop: {e}")

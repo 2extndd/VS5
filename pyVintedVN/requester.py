@@ -318,8 +318,9 @@ class requester:
                 try:
                     import db
                     db.increment_api_requests()
-                except:
-                    pass  # Don't fail request if counter fails
+                    logger.debug(f"[API_COUNTER] ✅ API request counted (legacy requester)")
+                except Exception as e:
+                    logger.warning(f"[API_COUNTER] ⚠️ Failed to increment counter: {e}")
                 
                 
                 if response.status_code == 200:
