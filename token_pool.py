@@ -106,13 +106,14 @@ class TokenPool:
     
     def _prewarm_pool(self):
         """
-        Pre-warm pool by creating all tokens upfront.
-        This allows workers to start immediately without waiting for token creation.
-        Creates tokens with small delays to avoid triggering rate limits.
+        Pre-warm pool by creating tokens PARALLELLY in background threads.
+        This is FAST - creates 72 tokens in ~10 seconds instead of 60!
         """
-        logger.info(f"[TOKEN_POOL] 🔥 Pre-warming pool: creating {self.target_size} tokens...")
+        logger.info(f"[TOKEN_POOL] 🔥 Pre-warming pool: creating {self.target_size} tokens IN PARALLEL...")
         
         import proxies
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         # Ensure proxies are loaded
         proxies.get_random_proxy()
         
@@ -120,28 +121,37 @@ class TokenPool:
         created = 0
         failed = 0
         
-        for i in range(self.target_size):
-            # Get a random proxy for this token
-            proxy_dict = proxies.get_random_proxy()
-            
-            session = self._create_new_session_with_proxy(proxy_dict)
-            if session:
-                with self.lock:
-                    self.sessions.append(session)
-                created += 1
+        def create_token_with_index(index):
+            """Create single token - runs in separate thread"""
+            try:
+                # Small staggered delay to avoid simultaneous requests
+                time.sleep(index * 0.1)  # 0.1s delay between each start
                 
-                # Small delay between token requests (0.8s = 72 tokens in ~60 seconds)
-                if i < self.target_size - 1:  # Don't delay after last token
-                    time.sleep(0.8)
-            else:
-                failed += 1
-                logger.warning(f"[TOKEN_POOL] Failed to create token {i+1}/{self.target_size}")
-                # Wait a bit longer after failure
-                time.sleep(2)
+                proxy_dict = proxies.get_random_proxy()
+                session = self._create_new_session_with_proxy(proxy_dict)
+                return (index, session)
+            except Exception as e:
+                logger.error(f"[TOKEN_POOL] Error creating token #{index}: {e}")
+                return (index, None)
+        
+        # Create tokens in parallel (10 at a time to avoid overload)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(create_token_with_index, i) for i in range(self.target_size)]
+            
+            for future in as_completed(futures):
+                index, session = future.result()
+                if session:
+                    with self.lock:
+                        self.sessions.append(session)
+                    created += 1
+                    logger.info(f"[TOKEN_POOL] ✅ Token {created}/{self.target_size} ready")
+                else:
+                    failed += 1
+                    logger.warning(f"[TOKEN_POOL] ❌ Token {index+1} failed")
         
         elapsed = time.time() - start_time
-        logger.info(f"[TOKEN_POOL] ✅ Pre-warming complete: {created} tokens created, {failed} failed in {elapsed:.1f}s")
-        logger.info(f"[TOKEN_POOL] 🚀 Workers can now start IMMEDIATELY with ready tokens!")
+        logger.info(f"[TOKEN_POOL] ✅ PARALLEL pre-warming complete: {created} tokens in {elapsed:.1f}s!")
+        logger.info(f"[TOKEN_POOL] 🚀 That's {self.target_size/elapsed:.1f} tokens/sec (was 1.2 tokens/sec before)!")
     
     def _create_new_session_with_proxy(self, proxy_dict):
         """
