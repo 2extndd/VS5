@@ -300,6 +300,11 @@ if __name__ == "__main__":
         logger.info(f"[DEBUG] Monitor scheduler running: {monitor_scheduler.running}")
         
         # This will block and serve the web UI
+        # Disable werkzeug logs to reduce log spam
+        import logging
+        log = logging.getLogger('werkzeug')
+        log.setLevel(logging.ERROR)  # Only show errors, not every HTTP request
+        
         app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
     except KeyboardInterrupt:
         logger.info("Main process interrupted")
