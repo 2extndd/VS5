@@ -320,7 +320,10 @@ class TokenPool:
             # If we have fewer sessions than target, create a new one
             if len(self.sessions) < self.target_size and len(self.sessions) < self.max_size:
                 logger.info(f"[TOKEN_POOL] Creating new session ({len(self.sessions)}/{self.target_size})...")
-                new_session = self._create_new_session()
+                # 🔥 ВАЖНО: Используем метод С ПРОКСИ, иначе ban!
+                import proxies
+                proxy_dict = proxies.get_random_proxy()
+                new_session = self._create_new_session_with_proxy(proxy_dict)
                 if new_session:
                     self.sessions.append(new_session)
             
