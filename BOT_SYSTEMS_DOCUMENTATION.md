@@ -48,14 +48,21 @@ https://www.vinted.de/catalog?search_text=&catalog_ids=257&brand_ids=6397426&siz
 - **72 независимых воркера** (по одному на каждый query)
 - **ThreadPoolExecutor** для параллельного выполнения
 - **Каждый воркер** сканирует свой query каждые N секунд
+- **⚡ МГНОВЕННЫЙ СТАРТ** - все воркеры стартуют одновременно (нет staggered delay!)
 
 ```python
-# core.py - запуск воркеров
+# core.py - запуск воркеров (БЕЗ ЗАДЕРЖЕК!)
 executor = ThreadPoolExecutor(max_workers=len(all_queries))
+
+# Все воркеры стартуют МГНОВЕННО с start_delay=0
 for idx, query in enumerate(all_queries):
-    start_delay = (idx * 60.0) / num_queries  # Разная задержка старта
-    executor.submit(continuous_query_worker, query, queue, start_delay)
+    executor.submit(continuous_query_worker, query, queue, start_delay=0)
 ```
+
+**🔥 Почему нет staggered start:**
+- Токены уже **pre-warmed** (созданы заранее)
+- Воркеры не создают токены при старте (берут готовые из pool)
+- Все 72 воркера начинают сканировать **одновременно**
 
 #### 3️⃣ Цикл Сканирования Воркера
 
@@ -136,24 +143,48 @@ categories = {
 
 ### 1️⃣ Token Pool System
 
-#### Уникальные Токены для Каждого Воркера
+#### 🔥 PRE-WARMING: Токены Создаются ДО Старта Воркеров
 
 ```python
 class TokenPool:
-    def __init__(self, target_size=72):
+    def __init__(self, target_size=72, max_size=100, prewarm=True):
         self.target_size = target_size  # 72 токена для 72 воркеров
         self.sessions = []  # Пул активных сессий
+        
+        # 🔥 PRE-WARMING: создаем ВСЕ токены сразу при инициализации
+        if prewarm:
+            self._prewarm_pool()
+    
+    def _prewarm_pool(self):
+        """
+        Создает ВСЕ 72 токена ЗАРАНЕЕ (до старта воркеров).
+        Это позволяет воркерам стартовать МГНОВЕННО!
+        """
+        for i in range(self.target_size):
+            proxy_dict = proxies.get_random_proxy()
+            session = self._create_new_session_with_proxy(proxy_dict)
+            if session:
+                self.sessions.append(session)
+            
+            # Небольшая задержка между созданием токенов
+            # 0.8 сек × 72 = ~60 секунд на весь пул
+            time.sleep(0.8)
+        
+        # После pre-warming все токены готовы!
+        # Воркеры могут стартовать МГНОВЕННО
 
     def get_session_for_worker(self, worker_id):
-        # Создает новый токен если нужно
-        if len(self.sessions) < self.target_size:
-            new_session = self._create_new_session()
-            self.sessions.append(new_session)
-
-        # Возвращает токен для конкретного воркера
+        # Воркер просто БЕРЕТ готовый токен (не создает!)
         session_idx = worker_id % len(self.sessions)
         return self.sessions[session_idx]
 ```
+
+**Преимущества Pre-warming:**
+- ✅ Все токены создаются **ДО** старта воркеров (за ~60 сек)
+- ✅ Воркеры стартуют **МГНОВЕННО** (нет задержки на создание токенов)
+- ✅ Первый скан происходит **СРАЗУ** для всех 72 воркеров
+- ✅ Задержка между находками = **ТОЛЬКО Query Refresh Delay** (60 сек)
+- ✅ Нет больше задержек в 3-5 минут между воркерами!
 
 #### 12 Разных User-Agent'ов
 
@@ -208,12 +239,23 @@ def rotate_proxy(self):
 - **Читается динамически** из БД каждую итерацию
 - **Применяется к каждому воркеру** независимо
 
-#### Staggered Worker Start
+#### ❌ Staggered Worker Start - УДАЛЕН!
 
+**СТАРАЯ система (до 06.10.2025):**
 ```python
-# Разная задержка старта для 72 воркеров
-start_delay = (idx * 60.0) / num_queries  # Распределение на 60 секунд
-# Избегание одновременных запросов к Vinted
+# Воркеры стартовали с задержками (создавало 3-5 мин разницу в находках!)
+start_delay = (idx * 60.0) / num_queries  # ❌ БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ
+```
+
+**НОВАЯ система (с 06.10.2025):**
+```python
+# ВСЕ воркеры стартуют МГНОВЕННО
+start_delay = 0  # ✅ Нет задержек!
+
+# Защита от бана теперь через:
+# 1. Pre-warming токенов (создаются ДО старта воркеров)
+# 2. Token Pool с уникальными токенами
+# 3. Proxy rotation для каждого запроса
 ```
 
 ### 4️⃣ Session Management
@@ -322,25 +364,86 @@ max_http_errors = 5             -- Мин. ошибок для рестарта
 min_redeploy_interval_minutes = 3 -- Мин. интервал между рестартами
 ```
 
-#### Цепочка Рестарта
+#### 6-Уровневая Цепочка Рестарта (с 06.10.2025)
 
 ```python
 def _perform_redeploy(self):
-    # 1. Попытка через Railway API
+    # 1️⃣ Попытка через Railway GraphQL API
     if self.api_token:
-        # GraphQL мутация для рестарта сервиса
         response = requests.post("https://backboard.railway.com/graphql/v2",
                                 json=payload, headers=headers)
+        if success: return True
     
-    # 2. Fallback через Railway CLI
-    if not success:
-        result = subprocess.run(["railway", "redeploy", "-y"])
+    # 2️⃣ Fallback через Railway CLI
+    result = subprocess.run(["railway", "redeploy", "-y"])
+    if result.returncode == 0: return True
     
-    # 3. Emergency fallback (без краша)
-    if not success:
-        # Сброс счетчиков ошибок
-        # Продолжение работы без рестарта
+    # 3️⃣ Fallback через HTTP REST API
+    response = requests.post(
+        f"https://backboard.railway.com/projects/{project_id}/services/{service_id}/redeploy",
+        headers={"Authorization": f"Bearer {api_token}"}
+    )
+    if response.status_code in [200, 201, 202]: return True
+    
+    # 4️⃣ Emergency: попытка через Webhook
+    if webhook_url:
+        response = requests.post(webhook_url)
+        if response.status_code in [200, 201, 202]: return True
+    
+    # 5️⃣ Emergency Exit (если включен ALLOW_EMERGENCY_EXIT=true)
+    if os.getenv('ALLOW_EMERGENCY_EXIT') == 'true':
+        # Отправляем SIGTERM самому себе
+        os.kill(os.getpid(), signal.SIGTERM)  # Exit code 143 (graceful shutdown)
+        # Railway автоматически перезапустит контейнер
+        return True
+    
+    # 6️⃣ Fake Redeploy (последний fallback, БЕЗ краша)
+    # Просто сбрасываем счетчики ошибок и продолжаем работу
+    self._reset_error_tracking()
+    return False
 ```
+
+#### 🩺 Healthcheck & CrashLoopBackOff Prevention
+
+**Проблема:** Railway перестает перезапускать контейнер после 5-10 крашей (CrashLoopBackOff)
+
+**Решение #1: SIGTERM вместо os._exit(1)**
+```python
+# БЫЛО (плохо - exit code 1 = crash):
+os._exit(1)
+
+# СТАЛО (хорошо - exit code 143 = graceful shutdown):
+os.kill(os.getpid(), signal.SIGTERM)
+```
+
+**Решение #2: Healthcheck endpoint**
+```python
+# Новый endpoint: /health и /healthcheck
+@app.route('/health')
+def healthcheck():
+    return jsonify({
+        "status": "healthy",
+        "workers": len(db.get_queries()),
+        "service": "vinted-bot"
+    }), 200
+```
+
+**Решение #3: railway.json конфигурация**
+```json
+{
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 100
+  }
+}
+```
+
+**Переменные окружения для редеплоя:**
+- `RAILWAY_REDEPLOY_WEBHOOK` - URL webhook для редеплоя (рекомендуется)
+- `ALLOW_EMERGENCY_EXIT=true` - разрешить emergency exit через SIGTERM
+- `RAILWAY_TOKEN` - токен Railway API для GraphQL/HTTP методов
 
 ---
 
@@ -552,12 +655,21 @@ INSERT INTO parameters (key, value) VALUES
 ### Переменные Окружения
 
 ```bash
+# Railway API (для автоматического редеплоя)
 RAILWAY_TOKEN=your_railway_token
 RAILWAY_PROJECT_ID=your_project_id
 RAILWAY_SERVICE_ID=your_service_id
+
+# Database
 DATABASE_URL=your_database_url
+
+# Telegram
 TELEGRAM_TOKEN=your_telegram_token
 TELEGRAM_CHAT_ID=your_chat_id
+
+# Redeploy Options (опционально)
+RAILWAY_REDEPLOY_WEBHOOK=https://your-webhook-url  # Рекомендуется для надежного редеплоя
+ALLOW_EMERGENCY_EXIT=true  # Разрешить SIGTERM exit при критических ошибках
 ```
 
 ### Railway Конфигурация
@@ -567,6 +679,38 @@ TELEGRAM_CHAT_ID=your_chat_id
 - **Логи** доступны через Railway dashboard
 - **Мониторинг** ресурсов и производительности
 
+#### railway.json
+
+```json
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 100
+  }
+}
+```
+
+**⚠️ ВАЖНО:**
+- НЕ используйте `startCommand` в railway.json - это перезапишет Procfile
+- Команда старта должна быть ТОЛЬКО в `Procfile`
+- `railway.json` только для конфигурации restart policy и healthcheck
+
+#### Procfile
+
+```
+web: pip install railway && python vinted_notifications.py
+```
+
+**Почему `pip install railway`:**
+- Railway CLI нужен для метода #2 редеплоя
+- Устанавливается при каждом деплое для гарантии доступности
+
 ---
 
 ## 🎯 Заключение
@@ -575,10 +719,21 @@ TELEGRAM_CHAT_ID=your_chat_id
 
 **Ключевые особенности:**
 - ✅ 72 параллельных воркера с уникальными токенами
+- ✅ **Pre-warming токенов** - мгновенный старт всех воркеров одновременно
 - ✅ Автоматическая ротация 196 прокси
 - ✅ Многоуровневая система защиты от бана
 - ✅ Реалтайм мониторинг через Web UI
-- ✅ Автоматический рестарт при критических ошибках
+- ✅ **6-уровневая система редеплоя** (GraphQL → CLI → HTTP → Webhook → SIGTERM → Fake)
+- ✅ **Healthcheck** для предотвращения CrashLoopBackOff
 - ✅ Динамическая конфигурация без перезапуска
+
+**🔥 Критические изменения от 06.10.2025:**
+- ❌ Убран staggered start (задержки между воркерами)
+- ✅ Добавлен pre-warming токенов (все токены создаются ДО старта)
+- ✅ Воркеры стартуют МГНОВЕННО (start_delay=0)
+- ✅ Задержка между находками = ТОЛЬКО Query Refresh Delay (60 сек)
+- ✅ SIGTERM вместо os._exit(1) для graceful shutdown
+- ✅ Healthcheck endpoint (/health) для Railway мониторинга
+- ✅ railway.json с restartPolicy конфигурацией
 
 **Система готова к продакшену и обеспечивает стабильную работу 24/7!** 🚀
