@@ -305,7 +305,7 @@ def get_user_country(profile_id):
     return user_country
 
 
-def continuous_query_worker(query, queue, start_delay=0):
+def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
     """
     Continuous worker that processes a SINGLE query independently.
     Each query has its own worker running in a separate thread.
@@ -321,9 +321,10 @@ def continuous_query_worker(query, queue, start_delay=0):
     Args:
         query: Single query tuple from database
         queue: Queue to put the items in
+        worker_index: Sequential worker index (0, 1, 2...) for token assignment
         start_delay: Random delay before starting (to avoid simultaneous token requests)
     """
-    query_id = query[0]
+    query_id = query[0]  # Database ID (may not be sequential!)
     query_url = query[1]
     
     # Add random delay to avoid all workers starting simultaneously (403 ban!)
@@ -341,7 +342,7 @@ def continuous_query_worker(query, queue, start_delay=0):
     # Retry getting token up to 5 times (tokens might not be ready yet)
     token_session = None
     for retry in range(5):
-        token_session = token_pool.get_session_for_worker(query_id)
+        token_session = token_pool.get_session_for_worker(worker_index)  # Use worker_index, not query_id!
         if token_session:
             break
         logger.warning(f"[WORKER #{query_id}] Failed to get session, retry {retry+1}/5 in 2s...")
@@ -373,7 +374,7 @@ def continuous_query_worker(query, queue, start_delay=0):
         # Если токен стал невалидным - token_pool автоматически заменит его
         if not token_session.is_valid:
             logger.warning(f"[WORKER #{query_id}] Token invalid - getting replacement...")
-            new_session = token_pool.get_session_for_worker(query_id)
+            new_session = token_pool.get_session_for_worker(worker_index)  # Use worker_index!
             if new_session:
                 token_session = new_session
                 vinted = Vinted(session=token_session.session)
@@ -419,7 +420,7 @@ def continuous_query_worker(query, queue, start_delay=0):
                     for retry_attempt in range(3):
                         # Получаем новый токен
                         logger.info(f"[WORKER #{query_id}] 🔑 Getting new token (retry {retry_attempt + 1}/3)...")
-                        new_session = token_pool.get_session_for_worker(query_id)
+                        new_session = token_pool.get_session_for_worker(worker_index)  # Use worker_index!
                         
                         if not new_session:
                             logger.warning(f"[WORKER #{query_id}] Failed to get new token for retry {retry_attempt + 1}/3")
@@ -575,7 +576,8 @@ def start_continuous_workers(queue):
         
         for idx, query in enumerate(all_queries):
             # No delay - all workers start at once with ready tokens!
-            executor.submit(continuous_query_worker, query, queue, start_delay=0)
+            # Pass idx as worker_index for token assignment (query ID may not be sequential!)
+            executor.submit(continuous_query_worker, query, queue, worker_index=idx, start_delay=0)
         
         logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers SUBMITTED to executor!")
         logger.info(f"[WORKERS] ⏳ Waiting 10 seconds for workers to initialize and report...")
