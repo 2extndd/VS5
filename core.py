@@ -326,11 +326,12 @@ def continuous_query_worker(query, queue, start_delay=0):
     while True:
         start_time = time.time()
         
+        # 🔥 КРИТИЧНО: refresh_delay определяется ЗДЕСЬ, ДО try-except
+        # Это гарантирует, что он ВСЕГДА будет определен для sleep()
+        refresh_delay = int(db.get_parameter("query_refresh_delay") or 60)
+        items_per_query = int(db.get_parameter("items_per_query") or 20)
+        
         try:
-            # Read FRESH configuration from DB on each cycle (dynamic!)
-            refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
-            items_per_query = int(db.get_parameter("items_per_query") or 20)
-
             # Scan this query using THIS worker's dedicated Vinted instance
             search_result = vinted.items.search(query_url, nbr_items=items_per_query)
 
@@ -359,7 +360,7 @@ def continuous_query_worker(query, queue, start_delay=0):
                 # Update worker stats (error)
                 update_worker_stats(query_id, 'error')
 
-                logger.error(f"[WORKER #{query_id}] ❌ HTTP {status_code} error after {elapsed:.2f}s - reported to redeploy system")
+                logger.error(f"[WORKER #{query_id}] ❌ HTTP {status_code} error after {elapsed:.2f}s - will retry in {refresh_delay}s")
             else:
                 # Successful scan - got items list
                 all_items = search_result
@@ -384,6 +385,7 @@ def continuous_query_worker(query, queue, start_delay=0):
 
         except Exception as e:
             elapsed = time.time() - start_time
+            
             # Report error to token pool
             token_pool.report_error(token_session)
 
@@ -393,11 +395,8 @@ def continuous_query_worker(query, queue, start_delay=0):
             # Report generic error to redeploy system (fallback)
             from railway_redeploy import report_403_error
             report_403_error()
-            logger.warning(f"[WORKER #{query_id}] Generic error reported as 403 to redeploy system")
-
-            # Still need to get refresh_delay for sleep
-            refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
-            logger.error(f"[WORKER #{query_id}] ❌ Unexpected error after {elapsed:.2f}s: {e}")
+            
+            logger.error(f"[WORKER #{query_id}] ❌ Unexpected error after {elapsed:.2f}s: {e} - will retry in {refresh_delay}s")
 
             # Check if token session became invalid
             if not token_session.is_valid:
@@ -409,7 +408,8 @@ def continuous_query_worker(query, queue, start_delay=0):
                 else:
                     logger.error(f"[WORKER #{query_id}] Failed to get replacement session!")
         
-        # Sleep for CURRENT refresh_delay (dynamically updated from DB!)
+        # 🔥 КРИТИЧНО: Sleep ВСЕГДА с одинаковой задержкой
+        # refresh_delay определен ДО try-except, поэтому ВСЕГДА доступен
         time.sleep(refresh_delay)
 
 
