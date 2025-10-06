@@ -675,9 +675,15 @@ def clear_item_queue(items_queue, new_items_queue):
                         # This prevents items appearing in TG but not in Web UI if DB fails
                         
                         # Add the item to the db (found_at already calculated above for delay)
-                        db.add_item_to_db(id=item.id, title=item.title, query_id=query_id, price=item.price, 
+                        db_save_success = db.add_item_to_db(id=item.id, title=item.title, query_id=query_id, price=item.price, 
                                           timestamp=item.raw_timestamp, photo_url=item.photo, currency=item.currency, 
                                           brand_title=item.brand_title, found_at=found_at)
+                        
+                        if not db_save_success:
+                            logger.error(f"[QUEUE] ❌ FAILED to save item {item.id} to database! Skipping Telegram send.")
+                            continue  # Don't send to Telegram if DB save failed!
+                        
+                        logger.debug(f"[QUEUE] ✅ Item {item.id} saved to database successfully")
                         
                         # Update the query's last_found timestamp
                         db.update_query_last_found(query_id, item.raw_timestamp)

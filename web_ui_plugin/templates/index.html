@@ -423,7 +423,7 @@
 <script>
 // AJAX автообновление дашборда каждые 10 секунд без перезагрузки страницы
 function refreshDashboard() {
-    if (document.visibilityState !== 'visible') return;
+    // Убрана проверка visibility - обновляем даже на неактивных вкладках!
     
     // Обновляем статистику
     fetch('/api/dashboard_stats')
@@ -528,7 +528,10 @@ function refreshDashboard() {
         .catch(error => console.error('Error refreshing items:', error));
 }
 
-// Запускаем обновление каждые 10 секунд
+// Запускаем первое обновление СРАЗУ при загрузке страницы
+refreshDashboard();
+
+// Затем обновляем каждые 10 секунд
 setInterval(refreshDashboard, 10000);
 </script>
 {% endblock %}

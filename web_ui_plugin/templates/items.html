@@ -347,7 +347,10 @@
                 .catch(error => console.error('Error refreshing items:', error));
         }
         
-        // Запускаем автообновление каждые 10 секунд
+        // Запускаем первое обновление СРАЗУ после загрузки DOM
+        refreshItems();
+        
+        // Затем автообновление каждые 10 секунд
         setInterval(refreshItems, 10000);
     });
 </script>
