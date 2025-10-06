@@ -449,25 +449,19 @@ def start_continuous_workers(queue):
         logger.info(f"[WORKERS] Workers will read FRESH config from DB on each cycle (dynamic!)")
         logger.info(f"[WORKERS] Changes in Web UI will apply IMMEDIATELY without restart! 🔥")
         
-        # Start a continuous worker for each query
-        # Using ThreadPoolExecutor to manage all threads
-        # Add staggered start delays to avoid simultaneous token requests (anti-ban!)
+        # Start ALL workers IMMEDIATELY - no staggered start!
+        # Tokens are already pre-warmed, so workers can start instantly
         executor = ThreadPoolExecutor(max_workers=len(all_queries))
         
-        import random
-        num_queries = len(all_queries)
+        logger.info(f"[WORKERS] 🚀 Starting ALL {len(all_queries)} workers INSTANTLY (no stagger delay)!")
         
-        # Stagger workers: spread 72 workers over 60 seconds (72 / 60 = 1.2 workers/sec)
-        # This avoids triggering rate limits
         for idx, query in enumerate(all_queries):
-            # Calculate delay: 0s for first, then spread evenly
-            start_delay = (idx * 60.0) / num_queries if num_queries > 1 else 0
-            executor.submit(continuous_query_worker, query, queue, start_delay)
+            # No delay - all workers start at once with ready tokens!
+            executor.submit(continuous_query_worker, query, queue, start_delay=0)
         
-        total_startup_time = 60 if num_queries > 1 else 0
-        logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers scheduled!")
-        logger.info(f"[WORKERS] ⏱️  Staggered start over {total_startup_time}s to avoid ban")
-        logger.info(f"[WORKERS] 🔥 All queries will scan in TRUE PARALLEL with DYNAMIC config!")
+        logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers started IMMEDIATELY!")
+        logger.info(f"[WORKERS] 🔥 All queries scanning in TRUE PARALLEL with DYNAMIC config!")
+        logger.info(f"[WORKERS] ⚡ No startup delay - tokens were pre-warmed!")
         
         # Keep executor alive
         return executor

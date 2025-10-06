@@ -620,17 +620,41 @@ class RailwayRedeployManager:
                 except Exception as e:
                     logger.warning(f"[REDEPLOY] Webhook failed: {e}")
 
-            # ⚠️ ВАЖНО: НЕ КРАШИМ БОТ!
-            # Вместо краша просто сбрасываем счетчики и продолжаем работу
-            # Система защиты (прокси, rate limits) будет продолжать защищать бота
-            logger.critical("[REDEPLOY] ════════════════════════════════════════")
-            logger.critical("[REDEPLOY] ⚠️  All redeploy methods failed")
-            logger.critical("[REDEPLOY] ✅ Error counters RESET - bot continues working")
-            logger.critical("[REDEPLOY] Note: Set RAILWAY_REDEPLOY_WEBHOOK env var for auto-redeploy")
-            logger.critical("[REDEPLOY] Manual redeploy may be required if errors persist")
-            logger.critical("[REDEPLOY] ════════════════════════════════════════")
+            # Метод 3: LAST RESORT - принудительный выход (Railway перезапустит контейнер)
+            # Используется только если установлена переменная ALLOW_EMERGENCY_EXIT=true
+            allow_exit = os.getenv('ALLOW_EMERGENCY_EXIT', 'false').lower() == 'true'
             
-            return False
+            if allow_exit:
+                logger.critical("[REDEPLOY] ════════════════════════════════════════")
+                logger.critical("[REDEPLOY] 💣 METHOD 3: EMERGENCY EXIT")
+                logger.critical("[REDEPLOY] 🔄 Forcing app restart via os._exit()")
+                logger.critical("[REDEPLOY] ⏱️  Railway will automatically restart container")
+                logger.critical("[REDEPLOY] ════════════════════════════════════════")
+                
+                # Даем время на запись логов и БД
+                import threading
+                def delayed_exit():
+                    time.sleep(3)
+                    logger.critical("[REDEPLOY] 💥 FORCING EXIT NOW...")
+                    os._exit(1)  # Принудительный выход - Railway перезапустит
+                
+                thread = threading.Thread(target=delayed_exit)
+                thread.daemon = True
+                thread.start()
+                
+                return True
+            else:
+                # ⚠️ НЕ КРАШИМ БОТ!
+                # Вместо краша просто сбрасываем счетчики и продолжаем работу
+                logger.critical("[REDEPLOY] ════════════════════════════════════════")
+                logger.critical("[REDEPLOY] ⚠️  All redeploy methods failed")
+                logger.critical("[REDEPLOY] ✅ Error counters RESET - bot continues working")
+                logger.critical("[REDEPLOY] 💡 To enable emergency exit, set: ALLOW_EMERGENCY_EXIT=true")
+                logger.critical("[REDEPLOY] Note: Set RAILWAY_REDEPLOY_WEBHOOK env var for auto-redeploy")
+                logger.critical("[REDEPLOY] Manual redeploy may be required if errors persist")
+                logger.critical("[REDEPLOY] ════════════════════════════════════════")
+                
+                return False
             
         except Exception as e:
             logger.error(f"[REDEPLOY] Emergency redeploy failed: {e}")
