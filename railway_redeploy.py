@@ -275,7 +275,23 @@ class RailwayRedeployManager:
                 logger.warning(f"[REDEPLOY] - Current errors: {total_errors} (403:{self.error_403_count}, 401:{self.error_401_count}, 429:{self.error_429_count})")
     
     def _perform_redeploy(self):
-        """Выполнить редеплой через Railway API"""
+        """
+        Выполнить редеплой через os._exit(1) - ЕДИНСТВЕННЫЙ РАБОЧИЙ МЕТОД!
+        
+        Railway API/CLI не работают (404 errors), поэтому используем проверенный метод
+        из коммита cf7b0fb4fbb470ea13ed6d7e43009745fcbe283c
+        """
+        logger.info("[REDEPLOY] 🔄 _perform_redeploy() called")
+        logger.info("[REDEPLOY] ════════════════════════════════════════")
+        logger.info("[REDEPLOY] 🚀 Using os._exit(1) method (PROVEN TO WORK!)")
+        logger.info("[REDEPLOY] 💡 Railway will automatically restart container")
+        logger.info("[REDEPLOY] ════════════════════════════════════════")
+        
+        # Сразу вызываем emergency redeploy (единственный рабочий метод)
+        return self._emergency_redeploy()
+    
+    def _perform_redeploy_OLD_BROKEN(self):
+        """СТАРЫЙ КОД - НЕ РАБОТАЕТ, оставлен для истории"""
         try:
             logger.info("[REDEPLOY] 🔄 _perform_redeploy() called")
             logger.info("[REDEPLOY] ════════════════════════════════════════")
