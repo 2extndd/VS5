@@ -621,8 +621,9 @@ class RailwayRedeployManager:
                     logger.warning(f"[REDEPLOY] Webhook failed: {e}")
 
             # Метод 3: LAST RESORT - принудительный выход (Railway перезапустит контейнер)
-            # Используется только если установлена переменная ALLOW_EMERGENCY_EXIT=true
-            allow_exit = os.getenv('ALLOW_EMERGENCY_EXIT', 'false').lower() == 'true'
+            # По умолчанию ВКЛЮЧЕН (как в старой версии cf7b0fb)
+            # Можно отключить через ALLOW_EMERGENCY_EXIT=false
+            allow_exit = os.getenv('ALLOW_EMERGENCY_EXIT', 'true').lower() == 'true'
             
             if allow_exit:
                 logger.critical("[REDEPLOY] ════════════════════════════════════════")
@@ -636,11 +637,9 @@ class RailwayRedeployManager:
                 def delayed_exit():
                     time.sleep(3)
                     logger.critical("[REDEPLOY] 💥 FORCING EXIT NOW...")
-                    # ВАЖНО: используем exit code 143 (SIGTERM) вместо 1
-                    # Exit code 143 = graceful shutdown, Railway его лучше воспринимает
-                    # Альтернатива: отправить себе SIGTERM вместо os._exit
-                    import signal
-                    os.kill(os.getpid(), signal.SIGTERM)
+                    # КАК В СТАРОЙ ВЕРСИИ cf7b0fb: os._exit(1)
+                    # Railway автоматически перезапустит контейнер
+                    os._exit(1)
                 
                 thread = threading.Thread(target=delayed_exit)
                 thread.daemon = True
