@@ -599,16 +599,7 @@ class RailwayRedeployManager:
             self._reset_error_tracking()
             logger.info("[REDEPLOY] Error tracking reset")
             
-            # Метод 1: Пробуем через HTTP API как последнее средство
-            logger.critical("[REDEPLOY] ════════════════════════════════════════")
-            logger.critical("[REDEPLOY] 🔄 METHOD 1: Trying HTTP API as last resort...")
-            logger.critical("[REDEPLOY] ════════════════════════════════════════")
-
-            if self._http_api_redeploy():
-                logger.critical("[REDEPLOY] ✅ HTTP API redeploy succeeded!")
-                return True
-
-            # Метод 2: Пробуем через Railway webhook (если настроен)
+            # Метод 1: Пробуем через Railway webhook (если настроен)
             webhook_url = os.getenv('RAILWAY_REDEPLOY_WEBHOOK')
             if webhook_url:
                 try:
@@ -620,16 +611,16 @@ class RailwayRedeployManager:
                 except Exception as e:
                     logger.warning(f"[REDEPLOY] Webhook failed: {e}")
 
-            # Метод 3: LAST RESORT - принудительный выход (Railway перезапустит контейнер)
+            # Метод 2: LAST RESORT - принудительный выход (Railway перезапустит контейнер)
             # По умолчанию ВКЛЮЧЕН (как в старой версии cf7b0fb)
             # Можно отключить через ALLOW_EMERGENCY_EXIT=false
             allow_exit = os.getenv('ALLOW_EMERGENCY_EXIT', 'true').lower() == 'true'
             
             if allow_exit:
                 logger.critical("[REDEPLOY] ════════════════════════════════════════")
-                logger.critical("[REDEPLOY] 💣 METHOD 3: EMERGENCY EXIT")
-                logger.critical("[REDEPLOY] 🔄 Forcing app restart via os._exit()")
-                logger.critical("[REDEPLOY] ⏱️  Railway will automatically restart container")
+                logger.critical("[REDEPLOY] 💣 METHOD 2: EMERGENCY EXIT (os._exit)")
+                logger.critical("[REDEPLOY] 🔄 Forcing app restart - Railway will auto-restart")
+                logger.critical("[REDEPLOY] ⏱️  Expected restart time: ~10-30 seconds")
                 logger.critical("[REDEPLOY] ════════════════════════════════════════")
                 
                 # Даем время на запись логов и БД

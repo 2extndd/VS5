@@ -1723,8 +1723,10 @@ def force_redeploy():
         logger.critical("[FORCE_REDEPLOY] ════════════════════════════════════════")
         logger.info("[FORCE_REDEPLOY] Manual redeploy initiated via web interface")
         
-        # Принудительно вызываем редеплой
-        redeploy_manager._perform_redeploy()
+        # Принудительно вызываем EMERGENCY redeploy напрямую (без попыток API/CLI)
+        # API/CLI не работают (404 errors), только os._exit(1) работает
+        logger.info("[FORCE_REDEPLOY] Skipping API/CLI attempts - going straight to emergency exit")
+        redeploy_manager._emergency_redeploy()
         
         # Проверяем, был ли редеплой успешным
         status = redeploy_manager.get_status()
