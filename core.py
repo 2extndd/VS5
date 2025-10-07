@@ -379,7 +379,10 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
                 vinted = Vinted(session=token_session.session)
                 logger.info(f"[WORKER #{query_id}] ✅ Auto-rotation complete: New session #{token_session.session_id}")
             else:
-                logger.error(f"[WORKER #{query_id}] ❌ Auto-rotation failed, continuing with old session")
+                # Auto-rotation failed (probably 403 global ban)
+                # Reset counter to wait another 5 cycles before retry
+                token_session.scan_count = 0
+                logger.error(f"[WORKER #{query_id}] ❌ Auto-rotation failed, continuing with old session (will retry in 5 scans)")
         
         # 🔥 КРИТИЧНО: Проверяем токен ПЕРЕД каждым сканированием!
         # Если токен стал невалидным - заменяем его
@@ -390,6 +393,9 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
                 token_session = new_session
                 vinted = Vinted(session=token_session.session)
                 logger.info(f"[WORKER #{query_id}] ✅ Got fresh pair: session #{token_session.session_id}")
+            else:
+                # Failed to create new pair - continue with invalid session (will try again next cycle)
+                logger.error(f"[WORKER #{query_id}] ❌ Failed to get fresh pair, continuing with invalid session")
         
         try:
             # Scan this query using THIS worker's dedicated Vinted instance
