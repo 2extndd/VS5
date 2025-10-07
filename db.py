@@ -414,23 +414,62 @@ def get_queries():
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
         
-        # Try to get with thread_id, fall back to without it for backward compatibility
+        # Try to get with thread_id and is_priority, fall back for backward compatibility
         try:
             if db_type == 'postgresql':
-                cursor.execute("SELECT id, query, last_item, query_name, thread_id FROM queries")
+                cursor.execute("SELECT id, query, last_item, query_name, thread_id, is_priority FROM queries")
             else:
-                cursor.execute("SELECT id, query, last_item, query_name, thread_id FROM queries")
+                cursor.execute("SELECT id, query, last_item, query_name, thread_id, is_priority FROM queries")
         except:
-            # Fallback for databases without thread_id column
-            if db_type == 'postgresql':
-                cursor.execute("SELECT id, query, last_item, query_name, NULL as thread_id FROM queries")
-            else:
-                cursor.execute("SELECT id, query, last_item, query_name, NULL as thread_id FROM queries")
+            # Fallback for databases without is_priority column
+            try:
+                if db_type == 'postgresql':
+                    cursor.execute("SELECT id, query, last_item, query_name, thread_id, FALSE as is_priority FROM queries")
+                else:
+                    cursor.execute("SELECT id, query, last_item, query_name, thread_id, 0 as is_priority FROM queries")
+            except:
+                # Fallback for databases without thread_id column
+                if db_type == 'postgresql':
+                    cursor.execute("SELECT id, query, last_item, query_name, NULL as thread_id, FALSE as is_priority FROM queries")
+                else:
+                    cursor.execute("SELECT id, query, last_item, query_name, NULL as thread_id, 0 as is_priority FROM queries")
             
         return cursor.fetchall()
     except Exception:
         print_exc()
         return []
+    finally:
+        if conn:
+            conn.close()
+
+
+def set_query_priority(query_id, is_priority):
+    """
+    Set priority status for a query.
+    Priority queries get 3 workers scanning every 20 seconds.
+    
+    Args:
+        query_id: ID of the query
+        is_priority: True for priority mode, False for normal mode
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    conn = None
+    try:
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
+        
+        if db_type == 'postgresql':
+            cursor.execute("UPDATE queries SET is_priority = %s WHERE id = %s", (is_priority, query_id))
+        else:
+            cursor.execute("UPDATE queries SET is_priority = ? WHERE id = ?", (1 if is_priority else 0, query_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print_exc()
+        return False
     finally:
         if conn:
             conn.close()

@@ -83,6 +83,7 @@
                         <tr>
                             <th class="d-none d-md-table-cell">#</th>
                             <th>Query</th>
+                            <th class="text-center">⚡ Priority</th>
                             <th class="d-none d-lg-table-cell">Thread ID</th>
                             <th class="d-none d-md-table-cell">Last Found Item</th>
                             <th class="text-center">Items</th>
@@ -105,6 +106,18 @@
                                         <small class="text-muted">Thread: {{ query.thread_id }}</small>
                                     {% endif %}
                                     <span class="badge bg-info ms-2">{{ query.items_count }} items</span>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="form-check form-switch d-inline-block">
+                                    <input class="form-check-input priority-toggle" 
+                                           type="checkbox" 
+                                           id="priority{{ query.query_id }}" 
+                                           data-query-id="{{ query.query_id }}"
+                                           {% if query.is_priority %}checked{% endif %}>
+                                    <label class="form-check-label d-none d-sm-inline" for="priority{{ query.query_id }}">
+                                        <small class="text-muted">{% if query.is_priority %}3 workers, 20s{% else %}1 worker, 60s{% endif %}</small>
+                                    </label>
                                 </div>
                             </td>
                             <td class="d-none d-lg-table-cell">
@@ -274,4 +287,84 @@
         </div>
     </div>
 </div>
+
+<script>
+// Handle priority toggle checkboxes
+document.addEventListener('DOMContentLoaded', function() {
+    const priorityToggles = document.querySelectorAll('.priority-toggle');
+    
+    priorityToggles.forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const queryId = this.dataset.queryId;
+            const isPriority = this.checked;
+            const label = this.nextElementSibling;
+            
+            // Update label text immediately
+            if (label) {
+                label.innerHTML = isPriority ? 
+                    '<small class="text-muted">3 workers, 20s</small>' : 
+                    '<small class="text-muted">1 worker, 60s</small>';
+            }
+            
+            // Send AJAX request to update priority
+            fetch(`/api/query/${queryId}/priority`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ is_priority: isPriority })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(`Query ${queryId} priority updated:`, data.message);
+                    // Show success toast (if you have toast system)
+                    showToast(data.message, 'success');
+                } else {
+                    console.error('Failed to update priority:', data.message);
+                    // Revert checkbox on error
+                    this.checked = !isPriority;
+                    if (label) {
+                        label.innerHTML = !isPriority ? 
+                            '<small class="text-muted">3 workers, 20s</small>' : 
+                            '<small class="text-muted">1 worker, 60s</small>';
+                    }
+                    showToast('Failed to update priority', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating priority:', error);
+                // Revert checkbox on error
+                this.checked = !isPriority;
+                if (label) {
+                    label.innerHTML = !isPriority ? 
+                        '<small class="text-muted">3 workers, 20s</small>' : 
+                        '<small class="text-muted">1 worker, 60s</small>';
+                }
+                showToast('Error updating priority', 'error');
+            });
+        });
+    });
+});
+
+// Simple toast notification (you can replace with Bootstrap toast if available)
+function showToast(message, type) {
+    // Try to use Bootstrap alert if available
+    const container = document.querySelector('.container-fluid') || document.body;
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    container.appendChild(alert);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        alert.remove();
+    }, 3000);
+}
+</script>
+
 {% endblock %}

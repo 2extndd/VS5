@@ -437,6 +437,11 @@ def queries():
         thread_id = None
         if len(query) > 4:
             thread_id = query[4]
+        
+        # Get is_priority (6th element, index 5) if available
+        is_priority = False
+        if len(query) > 5:
+            is_priority = bool(query[5])
             
         # Get items count for this query
         items_count = db.get_items_count_by_query(query[0])
@@ -448,7 +453,8 @@ def queries():
             'display': query_name if query_name else query[1],
             'last_found_item': last_found_item,
             'thread_id': thread_id,
-            'items_count': items_count
+            'items_count': items_count,
+            'is_priority': is_priority
         })
 
     # Sort by thread_id AND query name within each thread group
@@ -629,6 +635,38 @@ def edit_query(query_id):
         flash(f'Error updating query: {e}', 'error')
     
     return redirect(url_for('queries'))
+
+
+@app.route('/api/query/<int:query_id>/priority', methods=['POST'])
+def set_query_priority_api(query_id):
+    """API endpoint to set query priority (AJAX)"""
+    try:
+        data = request.get_json()
+        is_priority = data.get('is_priority', False)
+        
+        # Update priority in database
+        success = db.set_query_priority(query_id, is_priority)
+        
+        if success:
+            status = "priority" if is_priority else "normal"
+            logger.info(f"Query {query_id} priority set to: {status}")
+            return jsonify({
+                'success': True,
+                'message': f'Query set to {status} mode',
+                'is_priority': is_priority
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to update query priority'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error setting query {query_id} priority: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
 
 
 @app.route('/remove_query/all', methods=['POST'])
