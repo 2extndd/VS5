@@ -448,9 +448,9 @@ class TokenPool:
         logger.info(f"[TOKEN_POOL] 🔄 Creating fresh Token+Proxy pair for worker #{worker_index}...")
         
         import proxies
-        # Periodically recheck bad proxies (every ~10th fresh pair creation)
+        # Periodically recheck bad proxies (every ~15th fresh pair creation)
         # This ensures bad proxies get rechecked during normal bot operation
-        if worker_index % 10 == 0:
+        if worker_index % 15 == 0:
             logger.debug(f"[TOKEN_POOL] 🔄 Periodic recheck of bad proxies...")
             recovered = proxies.recheck_bad_proxies()
             if recovered > 0:
