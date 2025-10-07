@@ -36,22 +36,33 @@ USER_AGENTS = [
 
 class TokenSession:
     """
-    Represents a single session with unique token and User-Agent.
+    Represents a single session with unique token, User-Agent, AND proxy.
+    Token and proxy are BOUND together - they live and die together!
     """
-    def __init__(self, session_id, session, access_token, user_agent):
+    def __init__(self, session_id, session, access_token, user_agent, proxy):
         self.session_id = session_id
         self.session = session
         self.access_token = access_token
         self.user_agent = user_agent
+        self.proxy = proxy  # Proxy bound to this token
         self.created_at = time.time()
         self.request_count = 0
         self.error_count = 0
         self.last_error_time = None
         self.is_valid = True
+        self.scan_count = 0  # Counter for automatic rotation (every 5 scans)
         
     def increment_request(self):
         """Increment successful request counter"""
         self.request_count += 1
+        
+    def increment_scan(self):
+        """Increment scan counter for automatic rotation"""
+        self.scan_count += 1
+        
+    def needs_rotation(self, rotation_interval=5):
+        """Check if this session needs rotation (every N scans)"""
+        return self.scan_count >= rotation_interval
         
     def increment_error(self):
         """Increment error counter"""
@@ -229,11 +240,12 @@ class TokenPool:
             # Add Bearer authorization
             session.headers["Authorization"] = f"Bearer {access_token}"
             
-            token_session = TokenSession(session_id, session, access_token, user_agent)
+            token_session = TokenSession(session_id, session, access_token, user_agent, proxy_dict)
             # Show UNIQUE part of token (middle chars) and full browser info
             token_preview = f"{access_token[:10]}...{access_token[-10:]}"  # First 10 + last 10 chars
             ua_short = user_agent[:80] if len(user_agent) <= 80 else user_agent[:77] + "..."
-            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} | Token: {token_preview} | UA: {ua_short}")
+            proxy_display = f"{proxy_dict[:30]}..." if proxy_dict and len(str(proxy_dict)) > 30 else str(proxy_dict)
+            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} | Token: {token_preview} | Proxy: {proxy_display} | UA: {ua_short}")
             
             return token_session
             
@@ -307,10 +319,11 @@ class TokenPool:
             # Add Bearer authorization
             session.headers["Authorization"] = f"Bearer {access_token}"
             
-            token_session = TokenSession(session_id, session, access_token, user_agent)
+            # Legacy mode - no proxy binding
+            token_session = TokenSession(session_id, session, access_token, user_agent, proxy=None)
             # Show full browser info to see unique User-Agent
             ua_short = user_agent[:80] if len(user_agent) <= 80 else user_agent[:77] + "..."
-            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} created | UA: {ua_short}")
+            logger.info(f"[TOKEN_POOL] ✅ Session #{session_id} created (no proxy) | UA: {ua_short}")
             
             return token_session
             
@@ -412,6 +425,42 @@ class TokenPool:
             removed = before - after
             if removed > 0:
                 logger.info(f"[TOKEN_POOL] Removed {removed} invalid sessions")
+    
+    def create_fresh_pair(self, worker_index):
+        """
+        Create a completely fresh Token + Proxy pair for a worker.
+        Used for:
+        - Automatic rotation (every 5 scans)
+        - Error recovery (immediate retry with new pair)
+        
+        Args:
+            worker_index: Worker index to assign the new pair
+            
+        Returns:
+            TokenSession: New session with Token + Proxy pair
+        """
+        logger.info(f"[TOKEN_POOL] 🔄 Creating fresh Token+Proxy pair for worker #{worker_index}...")
+        
+        import proxies
+        proxy_dict = proxies.get_random_proxy()
+        new_session = self._create_new_session_with_proxy(proxy_dict)
+        
+        if new_session:
+            with self.lock:
+                # Replace old session at worker_index
+                if worker_index < len(self.sessions):
+                    old_session = self.sessions[worker_index]
+                    self.sessions[worker_index] = new_session
+                    logger.info(f"[TOKEN_POOL] ✅ Worker #{worker_index}: Replaced session #{old_session.session_id} → #{new_session.session_id}")
+                else:
+                    # Worker index out of range - just append
+                    self.sessions.append(new_session)
+                    logger.info(f"[TOKEN_POOL] ✅ Worker #{worker_index}: Added new session #{new_session.session_id}")
+            
+            return new_session
+        else:
+            logger.error(f"[TOKEN_POOL] ❌ Failed to create fresh pair for worker #{worker_index}")
+            return None
 
 
 # Global token pool instance

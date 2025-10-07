@@ -85,15 +85,10 @@ class Items:
             response = None
             if self.session:
                 # Using dedicated session from token pool
-                # Need to configure proxy for this request
-                import proxies
-                # Set random proxy for this session
-                proxy_dict = proxies.get_random_proxy()
-                if proxy_dict:
-                    converted_proxy = proxies.convert_proxy_string_to_dict(proxy_dict)
-                    self.session.proxies.update(converted_proxy)
+                # Proxy is already bound to this session - DON'T change it!
+                # Token and Proxy live together as a pair
 
-                # Make the request with dedicated session
+                # Make the request with dedicated session (proxy already configured)
                 response = self.session.get(url=api_url, params=params, timeout=30, allow_redirects=True)
 
                 # Increment API request counter

@@ -370,15 +370,26 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
         refresh_delay = int(db.get_parameter("query_refresh_delay") or 60)
         items_per_query = int(db.get_parameter("items_per_query") or 20)
         
-        # 🔥 КРИТИЧНО: Проверяем токен ПЕРЕД каждым сканированием!
-        # Если токен стал невалидным - token_pool автоматически заменит его
-        if not token_session.is_valid:
-            logger.warning(f"[WORKER #{query_id}] Token invalid - getting replacement...")
-            new_session = token_pool.get_session_for_worker(worker_index)  # Use worker_index!
+        # 🔥 НОВОЕ: Автоматическая ротация каждые 5 сканов (профилактика)
+        if token_session.needs_rotation(rotation_interval=5):
+            logger.info(f"[WORKER #{query_id}] 🔄 Auto-rotation: {token_session.scan_count} scans completed, getting fresh Token+Proxy pair...")
+            new_session = token_pool.create_fresh_pair(worker_index)
             if new_session:
                 token_session = new_session
                 vinted = Vinted(session=token_session.session)
-                logger.info(f"[WORKER #{query_id}] ✅ Got replacement token #{token_session.session_id}")
+                logger.info(f"[WORKER #{query_id}] ✅ Auto-rotation complete: New session #{token_session.session_id}")
+            else:
+                logger.error(f"[WORKER #{query_id}] ❌ Auto-rotation failed, continuing with old session")
+        
+        # 🔥 КРИТИЧНО: Проверяем токен ПЕРЕД каждым сканированием!
+        # Если токен стал невалидным - заменяем его
+        elif not token_session.is_valid:
+            logger.warning(f"[WORKER #{query_id}] Token invalid - getting fresh Token+Proxy pair...")
+            new_session = token_pool.create_fresh_pair(worker_index)
+            if new_session:
+                token_session = new_session
+                vinted = Vinted(session=token_session.session)
+                logger.info(f"[WORKER #{query_id}] ✅ Got fresh pair: session #{token_session.session_id}")
         
         try:
             # Scan this query using THIS worker's dedicated Vinted instance
@@ -411,19 +422,19 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
                 # Update worker stats (error)
                 update_worker_stats(query_id, 'error')
 
-                # 🔥 КРИТИЧНО: При 403/401 - НЕМЕДЛЕННО получить новый токен и повторить!
+                # 🔥 КРИТИЧНО: При 403/401 - НЕМЕДЛЕННО получить НОВУЮ ПАРУ и повторить!
                 if status_code in (403, 401):
-                    logger.warning(f"[WORKER #{query_id}] 🔄 Attempting IMMEDIATE retry with new token...")
+                    logger.warning(f"[WORKER #{query_id}] 🔄 Got {status_code} - attempting IMMEDIATE retry with NEW Token+Proxy pair...")
                     
-                    # Попытка получить новый токен и повторить запрос (до 3 попыток)
+                    # Попытка получить новую ПАРУ (Token + Proxy) и повторить запрос (до 3 попыток)
                     retry_success = False
                     for retry_attempt in range(3):
-                        # Получаем новый токен
-                        logger.info(f"[WORKER #{query_id}] 🔑 Getting new token (retry {retry_attempt + 1}/3)...")
-                        new_session = token_pool.get_session_for_worker(worker_index)  # Use worker_index!
+                        # Получаем НОВУЮ ПАРУ (Token + Proxy)
+                        logger.info(f"[WORKER #{query_id}] 🔑 Getting fresh Token+Proxy pair (retry {retry_attempt + 1}/3)...")
+                        new_session = token_pool.create_fresh_pair(worker_index)  # Fresh pair!
                         
                         if not new_session:
-                            logger.warning(f"[WORKER #{query_id}] Failed to get new token for retry {retry_attempt + 1}/3")
+                            logger.warning(f"[WORKER #{query_id}] Failed to get fresh pair for retry {retry_attempt + 1}/3")
                             time.sleep(1)  # Короткая пауза перед следующей попыткой
                             continue
                         
@@ -475,6 +486,10 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
                         else:
                             logger.info(f"[WORKER #{query_id}] 📭 No new items after retry ({elapsed:.2f}s, next scan in {refresh_delay}s)")
                             update_worker_stats(query_id, 'success', 0)
+                        
+                        # 🔥 Инкрементируем счетчик сканов после успешного retry
+                        token_session.increment_scan()
+                        logger.debug(f"[WORKER #{query_id}] Scan counter after retry: {token_session.scan_count}/5")
                 else:
                     # Для 429 и других ошибок - просто ждем refresh_delay
                     logger.error(f"[WORKER #{query_id}] ❌ HTTP {status_code} error after {elapsed:.2f}s - will retry in {refresh_delay}s")
@@ -499,6 +514,10 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
                     logger.info(f"[WORKER #{query_id}] 📭 No new items ({elapsed:.2f}s, next scan in {refresh_delay}s)")
                     # Update worker stats (successful scan, but no items)
                     update_worker_stats(query_id, 'success', 0)
+                
+                # 🔥 НОВОЕ: Инкрементируем счетчик сканов (для автоматической ротации)
+                token_session.increment_scan()
+                logger.debug(f"[WORKER #{query_id}] Scan counter: {token_session.scan_count}/5")
 
         except Exception as e:
             elapsed = time.time() - start_time
