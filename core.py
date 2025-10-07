@@ -305,7 +305,7 @@ def get_user_country(profile_id):
     return user_country
 
 
-def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
+def continuous_query_worker(query, queue, worker_index=0, start_delay=0, priority_worker_num=None):
     """
     Continuous worker that processes a SINGLE query independently.
     Each query has its own worker running in a separate thread.
@@ -315,6 +315,9 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
     - Query #2: scans every X sec independently with UNIQUE token & User-Agent
     - Query #N: scans every X sec independently with UNIQUE token & User-Agent
     
+    Priority queries get 3 workers scanning every 20 seconds.
+    Normal queries get 1 worker scanning at default interval.
+    
     Refresh delay is read from DB DYNAMICALLY on each cycle,
     so changes in Web UI apply immediately without restart!
     
@@ -322,18 +325,24 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
         query: Single query tuple from database
         queue: Queue to put the items in
         worker_index: Sequential worker index (0, 1, 2...) for token assignment and stats
-        start_delay: Random delay before starting (to avoid simultaneous token requests)
+        start_delay: Delay before starting (for staggered priority workers)
+        priority_worker_num: Priority worker number (1, 2, or 3) if this is a priority query worker
     """
     query_id = query[0]  # Database ID (may not be sequential!) - used for DB operations
     query_url = query[1]
     
-    # Add random delay to avoid all workers starting simultaneously (403 ban!)
+    # Worker name for logging
+    worker_name = f"[WORKER #Q{query_id}" + (f"-P{priority_worker_num}]" if priority_worker_num else "]")
+    
+    # Add delay for staggered start (priority workers)
     if start_delay > 0:
-        logger.info(f"[WORKER #{query_id}] Waiting {start_delay:.1f}s before start (anti-ban)")
+        logger.info(f"{worker_name} Waiting {start_delay:.1f}s before start (staggered)")
         time.sleep(start_delay)
     
-    logger.info(f"[WORKER #{query_id}] 🚀 Started - will use unique token & User-Agent")
-    logger.info(f"[WORKER #{query_id}] 📊 Worker lifecycle: STARTED")
+    logger.info(f"{worker_name} 🚀 Started - will use unique token & User-Agent")
+    if priority_worker_num:
+        logger.info(f"{worker_name} ⚡ Priority worker #{priority_worker_num}/3 - scanning every 20s")
+    logger.info(f"{worker_name} 📊 Worker lifecycle: STARTED")
     
     # Get dedicated session from token pool for THIS worker
     from token_pool import get_token_pool
@@ -365,14 +374,35 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
     while True:
         start_time = time.time()
         
+        # 🔥 ДИНАМИЧЕСКАЯ проверка priority status из БД (может измениться в Web UI!)
+        current_query_data = None
+        is_priority = False
+        try:
+            all_queries = db.get_queries()
+            for q in all_queries:
+                if q[0] == query_id:
+                    current_query_data = q
+                    is_priority = len(q) > 5 and bool(q[5])
+                    break
+        except Exception as e:
+            logger.warning(f"{worker_name} Failed to get priority status: {e}")
+        
         # 🔥 КРИТИЧНО: refresh_delay определяется ЗДЕСЬ, ДО try-except
-        # Это гарантирует, что он ВСЕГДА будет определен для sleep()
-        refresh_delay = int(db.get_parameter("query_refresh_delay") or 60)
+        # Priority queries: 20s fixed, Normal queries: from config
+        if is_priority:
+            refresh_delay = 20  # Fixed 20s for priority queries
+        else:
+            refresh_delay = int(db.get_parameter("query_refresh_delay") or 60)
+        
         items_per_query = int(db.get_parameter("items_per_query") or 20)
+        
+        # Log mode (priority or normal)
+        mode_str = f"⚡ Priority mode ({refresh_delay}s)" if is_priority else f"Normal mode ({refresh_delay}s)"
+        logger.debug(f"{worker_name} {mode_str}")
         
         # 🔥 НОВОЕ: Автоматическая ротация каждые 5 сканов (профилактика)
         if token_session.needs_rotation(rotation_interval=5):
-            logger.info(f"[WORKER #{query_id}] 🔄 Auto-rotation: {token_session.scan_count} scans completed, getting fresh Token+Proxy pair...")
+            logger.info(f"{worker_name} 🔄 Auto-rotation: {token_session.scan_count} scans completed, getting fresh Token+Proxy pair...")
             new_session = token_pool.create_fresh_pair(worker_index)
             if new_session:
                 token_session = new_session
@@ -568,59 +598,92 @@ def start_continuous_workers(queue):
         
         all_queries = db.get_queries()
         num_queries = len(all_queries)
-        logger.info(f"[WORKERS] Got {num_queries} queries - creating {num_queries} independent workers")
-        logger.info(f"[WORKERS] 📊 ARCHITECTURE: {num_queries} queries = {num_queries} parallel threads")
-        logger.info(f"[WORKERS] 📊 Each worker will make API requests independently")
         
-        # Initialize token pool with size matching number of queries (auto-scales!)
-        # 🔥 НОВОЕ: Токены создаются ПАРАЛЛЕЛЬНО (10 потоков) - 72 токена за ~10 сек!
+        # Count priority and normal queries
+        priority_count = sum(1 for q in all_queries if len(q) > 5 and bool(q[5]))
+        normal_count = num_queries - priority_count
+        total_workers = normal_count + (priority_count * 3)  # 3 workers per priority query
+        
+        logger.info(f"[WORKERS] Got {num_queries} queries ({normal_count} normal, {priority_count} priority)")
+        logger.info(f"[WORKERS] 📊 ARCHITECTURE: {total_workers} workers ({normal_count}×1 + {priority_count}×3)")
+        logger.info(f"[WORKERS] ⚡ Priority queries: 3 workers each, scanning every 20s")
+        logger.info(f"[WORKERS] 📊 Normal queries: 1 worker each, scanning at default interval")
+        
+        # Initialize token pool with size matching TOTAL number of workers
+        # 🔥 НОВОЕ: Токены создаются ПАРАЛЛЕЛЬНО (10 потоков) - быстрый старт!
         from token_pool import get_token_pool
-        token_pool = get_token_pool(target_size=num_queries, prewarm=True)  # ПАРАЛЛЕЛЬНОЕ создание!
-        logger.info(f"[WORKERS] 🎯 Token pool ready with {num_queries} tokens!")
+        token_pool = get_token_pool(target_size=total_workers, prewarm=True)  # ПАРАЛЛЕЛЬНОЕ создание!
+        logger.info(f"[WORKERS] 🎯 Token pool ready with {total_workers} tokens!")
         logger.info(f"[WORKERS] ⚡ Tokens created IN PARALLEL (10 threads) - FAST startup!")
         logger.info(f"[WORKERS] 🚀 All workers can start IMMEDIATELY with ready tokens!")
         
         # Get INITIAL configuration (for logging only)
-        refresh_delay = int(db.get_parameter("query_refresh_delay") or 15)
+        refresh_delay = int(db.get_parameter("query_refresh_delay") or 60)
         items_per_query = int(db.get_parameter("items_per_query") or 20)
         
         logger.info(f"[WORKERS] Initial config: {refresh_delay}s delay, {items_per_query} items per query")
         logger.info(f"[WORKERS] Workers will read FRESH config from DB on each cycle (dynamic!)")
         logger.info(f"[WORKERS] Changes in Web UI will apply IMMEDIATELY without restart! 🔥")
         
-        # Start ALL workers IMMEDIATELY - no staggered start!
-        # Tokens are already pre-warmed, so workers can start instantly
-        executor = ThreadPoolExecutor(max_workers=len(all_queries))
+        # Start ALL workers
+        executor = ThreadPoolExecutor(max_workers=total_workers)
         
-        logger.info(f"[WORKERS] 🚀 Starting ALL {len(all_queries)} workers INSTANTLY (no stagger delay)!")
+        logger.info(f"[WORKERS] 🚀 Starting {total_workers} workers...")
         
         # Reset active workers counter
         global _active_workers_count
         with _active_workers_lock:
             _active_workers_count = 0
         
-        for idx, query in enumerate(all_queries):
-            # No delay - all workers start at once with ready tokens!
-            # Pass idx as worker_index for token assignment (query ID may not be sequential!)
-            executor.submit(continuous_query_worker, query, queue, worker_index=idx, start_delay=0)
+        worker_index = 0  # Global worker index for token assignment
         
-        logger.info(f"[WORKERS] ✅ {len(all_queries)} independent workers SUBMITTED to executor!")
-        logger.info(f"[WORKERS] ⏳ Waiting 10 seconds for workers to initialize and report...")
+        for query in all_queries:
+            query_id = query[0]
+            is_priority = len(query) > 5 and bool(query[5])
+            
+            if is_priority:
+                # Create 3 workers for priority query with staggered start
+                logger.info(f"[WORKERS] ⚡ Creating 3 priority workers for Query #{query_id}")
+                for priority_idx in range(3):
+                    start_delay = priority_idx * 7  # 0s, 7s, 14s stagger
+                    executor.submit(
+                        continuous_query_worker, 
+                        query, 
+                        queue, 
+                        worker_index=worker_index,
+                        start_delay=start_delay,
+                        priority_worker_num=priority_idx + 1  # 1, 2, 3
+                    )
+                    worker_index += 1
+            else:
+                # Create 1 worker for normal query
+                executor.submit(
+                    continuous_query_worker, 
+                    query, 
+                    queue, 
+                    worker_index=worker_index,
+                    start_delay=0
+                )
+                worker_index += 1
+        
+        logger.info(f"[WORKERS] ✅ {total_workers} independent workers SUBMITTED to executor!")
+        logger.info(f"[WORKERS] ⏳ Waiting 15 seconds for workers to initialize and report...")
         
         # Wait for workers to initialize and report their status
-        time.sleep(10)
+        time.sleep(15)
         
         active_count = get_active_workers_count()
-        logger.info(f"[WORKERS] 📊 FINAL COUNT: {active_count}/{len(all_queries)} workers are ACTIVE!")
+        logger.info(f"[WORKERS] 📊 FINAL COUNT: {active_count}/{total_workers} workers are ACTIVE!")
         
-        if active_count < len(all_queries):
-            logger.error(f"[WORKERS] ⚠️ WARNING: {len(all_queries) - active_count} workers FAILED TO START!")
-            logger.error(f"[WORKERS] ⚠️ Expected {len(all_queries)} workers, but only {active_count} are running!")
+        if active_count < total_workers:
+            logger.error(f"[WORKERS] ⚠️ WARNING: {total_workers - active_count} workers FAILED TO START!")
+            logger.error(f"[WORKERS] ⚠️ Expected {total_workers} workers, but only {active_count} are running!")
         else:
             logger.info(f"[WORKERS] ✅ All {active_count} workers are running successfully!")
         
         logger.info(f"[WORKERS] 🔥 All queries scanning in TRUE PARALLEL with DYNAMIC config!")
-        logger.info(f"[WORKERS] ⚡ Expected API requests per cycle: {active_count} requests every {refresh_delay}s")
+        logger.info(f"[WORKERS] ⚡ Priority queries scan every 20s (3 workers each)")
+        logger.info(f"[WORKERS] ⚡ Normal queries scan every {refresh_delay}s (1 worker each)")
         
         # Keep executor alive
         return executor
