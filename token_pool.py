@@ -125,6 +125,12 @@ class TokenPool:
         import proxies
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
+        # Recheck bad proxies before creating new token-proxy pairs
+        logger.info(f"[TOKEN_POOL] 🔄 Rechecking bad proxies before creating token pool...")
+        recovered = proxies.recheck_bad_proxies()
+        if recovered > 0:
+            logger.info(f"[TOKEN_POOL] 🎉 Recovered {recovered} proxies - now available for token-proxy pairs!")
+        
         # Ensure proxies are loaded
         proxies.get_random_proxy()
         
@@ -442,6 +448,14 @@ class TokenPool:
         logger.info(f"[TOKEN_POOL] 🔄 Creating fresh Token+Proxy pair for worker #{worker_index}...")
         
         import proxies
+        # Periodically recheck bad proxies (every ~10th fresh pair creation)
+        # This ensures bad proxies get rechecked during normal bot operation
+        if worker_index % 10 == 0:
+            logger.debug(f"[TOKEN_POOL] 🔄 Periodic recheck of bad proxies...")
+            recovered = proxies.recheck_bad_proxies()
+            if recovered > 0:
+                logger.info(f"[TOKEN_POOL] 🎉 Recovered {recovered} proxies during periodic recheck!")
+        
         proxy_dict = proxies.get_random_proxy()
         new_session = self._create_new_session_with_proxy(proxy_dict)
         

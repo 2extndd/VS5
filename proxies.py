@@ -15,6 +15,11 @@ _PROXY_CACHE = None
 _PROXY_CACHE_INITIALIZED = False
 _SINGLE_PROXY = None
 
+# Bad proxies tracking - {proxy: {"failed_at": timestamp, "fail_count": count}}
+_BAD_PROXIES = {}
+# Time to wait before rechecking bad proxies (5 minutes)
+BAD_PROXY_RECHECK_INTERVAL = 5 * 60
+
 # URL to test proxies against
 _TEST_URL = "https://www.vinted.de/"
 _TEST_TIMEOUT = 10  # seconds (increased from 2 to avoid false negatives)
@@ -46,6 +51,8 @@ def fetch_proxies_from_link(url: str) -> List[str]:
 def check_proxies_parallel(proxies_list: List[str]) -> List[str]:
     """
     Check multiple proxies in parallel using a thread pool.
+    
+    Marks bad proxies in _BAD_PROXIES dict for later rechecking.
 
     Args:
         proxies_list (List[str]): List of proxy strings to check.
@@ -53,7 +60,9 @@ def check_proxies_parallel(proxies_list: List[str]) -> List[str]:
     Returns:
         List[str]: List of working proxies.
     """
+    global _BAD_PROXIES
     working_proxies = []
+    current_time = time.time()
 
     # Use ThreadPoolExecutor to check proxies in parallel
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PROXY_WORKERS) as executor:
@@ -67,11 +76,92 @@ def check_proxies_parallel(proxies_list: List[str]) -> List[str]:
                 is_working = future.result()
                 if is_working:
                     working_proxies.append(proxy)
+                    # Remove from bad proxies if it was there (proxy recovered!)
+                    if proxy in _BAD_PROXIES:
+                        logger.info(f"[PROXY] ✅ Proxy recovered: {proxy[:30]}... (was in bad list)")
+                        del _BAD_PROXIES[proxy]
+                else:
+                    # Mark as bad proxy
+                    if proxy not in _BAD_PROXIES:
+                        _BAD_PROXIES[proxy] = {"failed_at": current_time, "fail_count": 1}
+                        logger.debug(f"[PROXY] Added to bad list: {proxy[:30]}...")
+                    else:
+                        _BAD_PROXIES[proxy]["fail_count"] += 1
+                        _BAD_PROXIES[proxy]["failed_at"] = current_time
             except Exception:
-                # If an exception occurred during checking, consider the proxy not working
-                pass
+                # If an exception occurred during checking, mark as bad
+                if proxy not in _BAD_PROXIES:
+                    _BAD_PROXIES[proxy] = {"failed_at": current_time, "fail_count": 1}
 
+    logger.info(f"[PROXY] Working: {len(working_proxies)}, Bad: {len(_BAD_PROXIES)}")
     return working_proxies
+
+
+def recheck_bad_proxies() -> int:
+    """
+    Recheck bad proxies that have been in the bad list for at least BAD_PROXY_RECHECK_INTERVAL seconds.
+    If a proxy works now, it's added back to _PROXY_CACHE.
+    
+    This function should be called periodically (e.g., before creating new token-proxy pairs).
+    
+    Returns:
+        int: Number of proxies that recovered
+    """
+    global _BAD_PROXIES, _PROXY_CACHE
+    
+    if not _BAD_PROXIES:
+        logger.debug(f"[PROXY] No bad proxies to recheck")
+        return 0
+    
+    current_time = time.time()
+    proxies_to_recheck = []
+    
+    # Find bad proxies that are ready to be rechecked
+    for proxy, info in _BAD_PROXIES.items():
+        time_since_fail = current_time - info["failed_at"]
+        if time_since_fail >= BAD_PROXY_RECHECK_INTERVAL:
+            proxies_to_recheck.append(proxy)
+    
+    if not proxies_to_recheck:
+        logger.debug(f"[PROXY] {len(_BAD_PROXIES)} bad proxies exist, but none ready for recheck yet")
+        return 0
+    
+    logger.info(f"[PROXY] 🔄 Rechecking {len(proxies_to_recheck)} bad proxies (out of {len(_BAD_PROXIES)} total bad)...")
+    
+    # Check them in parallel
+    recovered_proxies = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PROXY_WORKERS) as executor:
+        future_to_proxy = {executor.submit(check_proxy, proxy): proxy for proxy in proxies_to_recheck}
+        
+        for future in concurrent.futures.as_completed(future_to_proxy):
+            proxy = future_to_proxy[future]
+            try:
+                is_working = future.result()
+                if is_working:
+                    recovered_proxies.append(proxy)
+                    # Remove from bad list
+                    del _BAD_PROXIES[proxy]
+                    # Add back to cache if cache exists
+                    if _PROXY_CACHE is not None:
+                        _PROXY_CACHE.append(proxy)
+                    logger.info(f"[PROXY] ✅ Proxy recovered and added back to pool: {proxy[:30]}...")
+                else:
+                    # Still bad - update timestamp
+                    _BAD_PROXIES[proxy]["failed_at"] = current_time
+                    _BAD_PROXIES[proxy]["fail_count"] += 1
+                    logger.debug(f"[PROXY] ❌ Proxy still bad (fail count: {_BAD_PROXIES[proxy]['fail_count']}): {proxy[:30]}...")
+            except Exception:
+                # Still bad - update timestamp
+                if proxy in _BAD_PROXIES:
+                    _BAD_PROXIES[proxy]["failed_at"] = current_time
+                    _BAD_PROXIES[proxy]["fail_count"] += 1
+    
+    if recovered_proxies:
+        logger.info(f"[PROXY] 🎉 Recovered {len(recovered_proxies)} proxies! Now available: {len(_PROXY_CACHE) if _PROXY_CACHE else 0}")
+    else:
+        logger.info(f"[PROXY] ❌ No proxies recovered from recheck")
+    
+    return len(recovered_proxies)
 
 
 def get_random_proxy() -> Optional[str]:
@@ -410,7 +500,7 @@ def get_proxy_statistics() -> dict:
     Returns:
         dict: Статистика прокси
     """
-    global _PROXY_CACHE, _PROXY_CACHE_INITIALIZED, _SINGLE_PROXY
+    global _PROXY_CACHE, _PROXY_CACHE_INITIALIZED, _SINGLE_PROXY, _BAD_PROXIES
     
     # Import db here to avoid circular imports
     import db
@@ -419,6 +509,13 @@ def get_proxy_statistics() -> dict:
     current_proxy_display = _SINGLE_PROXY
     if not current_proxy_display and _PROXY_CACHE:
         current_proxy_display = f"Random from {len(_PROXY_CACHE)} proxies (e.g., {_PROXY_CACHE[0][:20]}...)"
+    
+    # Calculate how many bad proxies are ready for recheck
+    current_time = time.time()
+    bad_proxies_ready_for_recheck = sum(
+        1 for info in _BAD_PROXIES.values() 
+        if current_time - info["failed_at"] >= BAD_PROXY_RECHECK_INTERVAL
+    )
     
     stats = {
         "cache_initialized": _PROXY_CACHE_INITIALIZED,
@@ -429,7 +526,10 @@ def get_proxy_statistics() -> dict:
         "last_check_time": db.get_parameter("last_proxy_check_time"),
         "proxy_list_configured": bool(db.get_parameter("proxy_list")),
         "proxy_link_configured": bool(db.get_parameter("proxy_list_link")),
-        "proxy_recheck_interval_hours": PROXY_RECHECK_INTERVAL / 3600
+        "proxy_recheck_interval_hours": PROXY_RECHECK_INTERVAL / 3600,
+        "bad_proxies_count": len(_BAD_PROXIES),
+        "bad_proxies_ready_for_recheck": bad_proxies_ready_for_recheck,
+        "bad_proxy_recheck_interval_minutes": BAD_PROXY_RECHECK_INTERVAL / 60
     }
     
     # Маскируем чувствительные данные
