@@ -413,8 +413,8 @@ def index():
 
 @app.route('/queries')
 def queries():
-    # Get queries
-    all_queries = db.get_queries()
+    # Get queries with priority (auto-fallback if migration not run)
+    all_queries = db.get_queries_with_priority()
     formatted_queries = []
     for i, query in enumerate(all_queries):
         parsed_query = urlparse(query[1])

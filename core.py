@@ -378,11 +378,11 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0, priorit
         current_query_data = None
         is_priority = False
         try:
-            all_queries = db.get_queries()
+            all_queries = db.get_queries_with_priority()
             for q in all_queries:
                 if q[0] == query_id:
                     current_query_data = q
-                    # Safely check is_priority (may not exist if migration not run)
+                    # Check is_priority if field exists (len > 5)
                     if len(q) > 5:
                         is_priority = bool(q[5])
                     break
@@ -598,30 +598,18 @@ def start_continuous_workers(queue):
     try:
         logger.info(f"[WORKERS] 🚀 Starting INDEPENDENT workers for each query...")
         
-        all_queries = db.get_queries()
+        # Use get_queries_with_priority() - auto-fallback if migration not run
+        all_queries = db.get_queries_with_priority()
         num_queries = len(all_queries)
         
         if num_queries == 0:
             logger.warning(f"[WORKERS] No queries found in database!")
             return None
         
-        # Count priority and normal queries (fallback if is_priority field doesn't exist yet)
-        try:
-            priority_count = sum(1 for q in all_queries if len(q) > 5 and bool(q[5]))
-            normal_count = num_queries - priority_count
-            total_workers = normal_count + (priority_count * 3)  # 3 workers per priority query
-            
-            # Fallback: if total_workers is 0, migration hasn't run yet - use old logic
-            if total_workers == 0:
-                logger.warning(f"[WORKERS] ⚠️ Priority field not found - using legacy mode (1 worker per query)")
-                total_workers = num_queries
-                priority_count = 0
-                normal_count = num_queries
-        except Exception as e:
-            logger.warning(f"[WORKERS] ⚠️ Error reading priority field: {e} - using legacy mode")
-            total_workers = num_queries
-            priority_count = 0
-            normal_count = num_queries
+        # Count priority and normal queries
+        priority_count = sum(1 for q in all_queries if len(q) > 5 and bool(q[5]))
+        normal_count = num_queries - priority_count
+        total_workers = normal_count + (priority_count * 3)  # 3 workers per priority query
         
         logger.info(f"[WORKERS] Got {num_queries} queries ({normal_count} normal, {priority_count} priority)")
         logger.info(f"[WORKERS] 📊 ARCHITECTURE: {total_workers} workers ({normal_count}×1 + {priority_count}×3)")

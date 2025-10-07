@@ -414,30 +414,52 @@ def get_queries():
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
         
-        # Try to get with thread_id and is_priority, fall back for backward compatibility
+        # Try to get with thread_id first (backward compatible)
         try:
             if db_type == 'postgresql':
-                cursor.execute("SELECT id, query, last_item, query_name, thread_id, is_priority FROM queries")
+                cursor.execute("SELECT id, query, last_item, query_name, thread_id FROM queries")
             else:
-                cursor.execute("SELECT id, query, last_item, query_name, thread_id, is_priority FROM queries")
+                cursor.execute("SELECT id, query, last_item, query_name, thread_id FROM queries")
         except:
-            # Fallback for databases without is_priority column
-            try:
-                if db_type == 'postgresql':
-                    cursor.execute("SELECT id, query, last_item, query_name, thread_id, FALSE as is_priority FROM queries")
-                else:
-                    cursor.execute("SELECT id, query, last_item, query_name, thread_id, 0 as is_priority FROM queries")
-            except:
-                # Fallback for databases without thread_id column
-                if db_type == 'postgresql':
-                    cursor.execute("SELECT id, query, last_item, query_name, NULL as thread_id, FALSE as is_priority FROM queries")
-                else:
-                    cursor.execute("SELECT id, query, last_item, query_name, NULL as thread_id, 0 as is_priority FROM queries")
+            # Fallback for databases without thread_id column
+            if db_type == 'postgresql':
+                cursor.execute("SELECT id, query, last_item, query_name, NULL as thread_id FROM queries")
+            else:
+                cursor.execute("SELECT id, query, last_item, query_name, NULL as thread_id FROM queries")
             
         return cursor.fetchall()
     except Exception:
         print_exc()
         return []
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_queries_with_priority():
+    """
+    Get queries WITH priority field (for priority system).
+    Falls back to get_queries() if priority field doesn't exist.
+    
+    Returns:
+        List of tuples: (id, query, last_item, query_name, thread_id, is_priority)
+    """
+    conn = None
+    try:
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Try to get with is_priority field
+        if db_type == 'postgresql':
+            cursor.execute("SELECT id, query, last_item, query_name, thread_id, is_priority FROM queries")
+        else:
+            cursor.execute("SELECT id, query, last_item, query_name, thread_id, is_priority FROM queries")
+        
+        return cursor.fetchall()
+    except Exception:
+        # Fallback to regular get_queries() if is_priority field doesn't exist
+        # This returns 5-element tuples without is_priority
+        return get_queries()
     finally:
         if conn:
             conn.close()
