@@ -136,50 +136,63 @@ def get_random_proxy() -> Optional[str]:
     # Initialize all_proxies list
     all_proxies = []
 
-    # Check if PROXY_LIST is configured in the database
-    proxy_list = db.get_parameter("proxy_list")
-    logger.info(f"[PROXY] proxy_list from DB: {proxy_list[:100] if proxy_list else 'None'}{'...' if proxy_list and len(proxy_list) > 100 else ''}")
-    if proxy_list:
-        try:
-            # If PROXY_LIST is stored as a Python list string representation, eval it
-            if proxy_list.startswith('[') and proxy_list.endswith(']'):
-                all_proxies = eval(proxy_list)
-            else:
-                # If PROXY_LIST is a string with multiple proxies separated by semicolons OR newlines
-                # First try splitting by newlines (for column format)
-                proxies_by_lines = [p.strip() for p in proxy_list.split('\n') if p.strip()]
-                if len(proxies_by_lines) > 1:
-                    # Multiple lines found - use line-by-line format
-                    all_proxies = proxies_by_lines
-                else:
-                    # Single line or no newlines - use semicolon format
-                    all_proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
-                
-                # Convert WebShare format proxies to standard format
-                converted_proxies = []
-                for proxy in all_proxies:
-                    parts = proxy.strip().split(':')
-                    if len(parts) == 4 and not ('://' in proxy or '@' in proxy):
-                        # WebShare format: ip:port:user:pass -> http://user:pass@ip:port
-                        converted_proxies.append(convert_webshare_to_standard(proxy))
-                    else:
-                        converted_proxies.append(proxy)
-                all_proxies = converted_proxies
-            logger.info(f"[PROXY] Parsed {len(all_proxies)} proxies from proxy_list")
-        except Exception as e:
-            logger.error(f"[PROXY] Error parsing proxy_list: {e}")
-            all_proxies = []
-
-    # Check if PROXY_LIST_LINK is configured in the database
+    # Check if PROXY_LIST_LINK is configured first (priority over manual list)
     proxy_list_link = db.get_parameter("proxy_list_link")
     if proxy_list_link:
         logger.info(f"[PROXY] Fetching proxies from link: {proxy_list_link}")
-        # Fetch proxies from the link and add them to all_proxies
+        # Fetch proxies from the link
         link_proxies = fetch_proxies_from_link(proxy_list_link)
         logger.info(f"[PROXY] Fetched {len(link_proxies)} proxies from link")
-        all_proxies.extend(link_proxies)
+        
+        # Convert WebShare format to standard format
+        converted_proxies = []
+        for proxy in link_proxies:
+            parts = proxy.strip().split(':')
+            if len(parts) == 4 and not ('://' in proxy or '@' in proxy):
+                # WebShare format: ip:port:user:pass -> http://user:pass@ip:port
+                converted_proxies.append(convert_webshare_to_standard(proxy))
+            else:
+                converted_proxies.append(proxy)
+        all_proxies = converted_proxies
+        logger.info(f"[PROXY] Using proxies from link (ignoring manual proxy_list to avoid duplicates)")
+    else:
+        # If no link, use manual PROXY_LIST from database
+        proxy_list = db.get_parameter("proxy_list")
+        logger.info(f"[PROXY] proxy_list from DB: {proxy_list[:100] if proxy_list else 'None'}{'...' if proxy_list and len(proxy_list) > 100 else ''}")
+        if proxy_list:
+            try:
+                # If PROXY_LIST is stored as a Python list string representation, eval it
+                if proxy_list.startswith('[') and proxy_list.endswith(']'):
+                    all_proxies = eval(proxy_list)
+                else:
+                    # If PROXY_LIST is a string with multiple proxies separated by semicolons OR newlines
+                    # First try splitting by newlines (for column format)
+                    proxies_by_lines = [p.strip() for p in proxy_list.split('\n') if p.strip()]
+                    if len(proxies_by_lines) > 1:
+                        # Multiple lines found - use line-by-line format
+                        all_proxies = proxies_by_lines
+                    else:
+                        # Single line or no newlines - use semicolon format
+                        all_proxies = [p.strip() for p in proxy_list.split(';') if p.strip()]
+                    
+                    # Convert WebShare format proxies to standard format
+                    converted_proxies = []
+                    for proxy in all_proxies:
+                        parts = proxy.strip().split(':')
+                        if len(parts) == 4 and not ('://' in proxy or '@' in proxy):
+                            # WebShare format: ip:port:user:pass -> http://user:pass@ip:port
+                            converted_proxies.append(convert_webshare_to_standard(proxy))
+                        else:
+                            converted_proxies.append(proxy)
+                    all_proxies = converted_proxies
+                logger.info(f"[PROXY] Parsed {len(all_proxies)} proxies from proxy_list")
+            except Exception as e:
+                logger.error(f"[PROXY] Error parsing proxy_list: {e}")
+                all_proxies = []
     
-    logger.info(f"[PROXY] Total proxies collected: {len(all_proxies)}")
+    # Deduplicate proxies (just in case)
+    all_proxies = list(dict.fromkeys(all_proxies))
+    logger.info(f"[PROXY] Total unique proxies collected: {len(all_proxies)}")
 
     # Check proxies in parallel if we have any and CHECK_PROXIES is True
     if all_proxies:
