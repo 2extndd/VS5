@@ -321,10 +321,10 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
     Args:
         query: Single query tuple from database
         queue: Queue to put the items in
-        worker_index: Sequential worker index (0, 1, 2...) for token assignment
+        worker_index: Sequential worker index (0, 1, 2...) for token assignment and stats
         start_delay: Random delay before starting (to avoid simultaneous token requests)
     """
-    query_id = query[0]  # Database ID (may not be sequential!)
+    query_id = query[0]  # Database ID (may not be sequential!) - used for DB operations
     query_url = query[1]
     
     # Add random delay to avoid all workers starting simultaneously (403 ban!)
@@ -419,8 +419,8 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
                 # Report error to token pool as well
                 token_pool.report_error(token_session)
 
-                # Update worker stats (error)
-                update_worker_stats(query_id, 'error')
+                # Update worker stats (error) - use worker_index for correct counting
+                update_worker_stats(worker_index, 'error')
 
                 # 🔥 КРИТИЧНО: При 403/401 - НЕМЕДЛЕННО получить НОВУЮ ПАРУ и повторить!
                 if status_code in (403, 401):
@@ -482,10 +482,10 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
                         if all_items:
                             queue.put((all_items, query_id))
                             logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items after retry in {elapsed:.2f}s (next scan in {refresh_delay}s)")
-                            update_worker_stats(query_id, 'success', len(all_items))
+                            update_worker_stats(worker_index, 'success', len(all_items))
                         else:
                             logger.info(f"[WORKER #{query_id}] 📭 No new items after retry ({elapsed:.2f}s, next scan in {refresh_delay}s)")
-                            update_worker_stats(query_id, 'success', 0)
+                            update_worker_stats(worker_index, 'success', 0)
                         
                         # 🔥 Инкрементируем счетчик сканов после успешного retry
                         token_session.increment_scan()
@@ -508,12 +508,12 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
                 if all_items:
                     queue.put((all_items, query_id))
                     logger.info(f"[WORKER #{query_id}] ✅ Found {len(all_items)} items in {elapsed:.2f}s (next scan in {refresh_delay}s)")
-                    # Update worker stats
-                    update_worker_stats(query_id, 'success', len(all_items))
+                    # Update worker stats - use worker_index for correct counting
+                    update_worker_stats(worker_index, 'success', len(all_items))
                 else:
                     logger.info(f"[WORKER #{query_id}] 📭 No new items ({elapsed:.2f}s, next scan in {refresh_delay}s)")
-                    # Update worker stats (successful scan, but no items)
-                    update_worker_stats(query_id, 'success', 0)
+                    # Update worker stats (successful scan, but no items) - use worker_index
+                    update_worker_stats(worker_index, 'success', 0)
                 
                 # 🔥 НОВОЕ: Инкрементируем счетчик сканов (для автоматической ротации)
                 token_session.increment_scan()
@@ -525,8 +525,8 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0):
             # Report error to token pool
             token_pool.report_error(token_session)
 
-            # Update worker stats (error)
-            update_worker_stats(query_id, 'error')
+            # Update worker stats (error) - use worker_index for correct counting
+            update_worker_stats(worker_index, 'error')
 
             # Report generic error to redeploy system (fallback)
             from railway_redeploy import report_403_error
