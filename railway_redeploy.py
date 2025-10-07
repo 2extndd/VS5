@@ -50,7 +50,7 @@ class RailwayRedeployManager:
         
         # Защита от частых редеплоев
         self.last_redeploy_time = self._load_last_redeploy_time()
-        self.min_redeploy_interval_minutes = 3  # Изменено с 10 на 3 минуты
+        self.min_redeploy_interval_minutes = 3  # Минимальный интервал между редеплоями
         
         self.lock = threading.Lock()
         
@@ -644,9 +644,10 @@ class RailwayRedeployManager:
                 def delayed_exit():
                     time.sleep(3)
                     logger.critical("[REDEPLOY] 💥 FORCING EXIT NOW...")
-                    # КАК В СТАРОЙ ВЕРСИИ cf7b0fb: os._exit(1)
-                    # Railway автоматически перезапустит контейнер
-                    os._exit(1)
+                    # Exit code 0 = нормальное завершение (Railway не будет блокировать)
+                    # Exit code 1 = ошибка (Railway может заблокировать после нескольких рестартов)
+                    # Railway автоматически перезапустит контейнер при любом exit code
+                    os._exit(0)
                 
                 thread = threading.Thread(target=delayed_exit)
                 thread.daemon = True

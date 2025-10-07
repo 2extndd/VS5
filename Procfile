@@ -1,1 +1,1 @@
-web: pip install railway && python vinted_notifications.py
+web: while true; do pip install railway && python vinted_notifications.py; echo "Bot restarting in 5 seconds..."; sleep 5; done
