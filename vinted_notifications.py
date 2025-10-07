@@ -202,6 +202,13 @@ if __name__ == "__main__":
         
         logger.info("Database initialization phase completed")
         
+        # Run priority query system migration (safe to run multiple times)
+        logger.info("Running priority query system migration...")
+        if db.run_priority_migration():
+            logger.info("✅ Priority query system migration completed successfully")
+        else:
+            logger.warning("⚠️ Priority query system migration failed (may already exist)")
+        
         # Reset API requests counter on bot start
         logger.info("Resetting API requests counter...")
         db.reset_api_requests()

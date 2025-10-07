@@ -465,6 +465,50 @@ def get_queries_with_priority():
             conn.close()
 
 
+def run_priority_migration():
+    """
+    Run priority query system migration - adds is_priority column.
+    Safe to run multiple times (IF NOT EXISTS).
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    conn = None
+    try:
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Try to add is_priority column
+        if db_type == 'postgresql':
+            cursor.execute("""
+                ALTER TABLE queries 
+                ADD COLUMN IF NOT EXISTS is_priority BOOLEAN DEFAULT FALSE
+            """)
+        else:
+            # SQLite doesn't support IF NOT EXISTS in ALTER TABLE
+            # Check if column exists first
+            cursor.execute("PRAGMA table_info(queries)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            if 'is_priority' not in columns:
+                cursor.execute("""
+                    ALTER TABLE queries 
+                    ADD COLUMN is_priority INTEGER DEFAULT 0
+                """)
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        # Column might already exist - that's OK
+        if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+            return True
+        print_exc()
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
 def set_query_priority(query_id, is_priority):
     """
     Set priority status for a query.
