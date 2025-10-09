@@ -175,10 +175,10 @@
         // Initial load
         fetchLogs();
 
-        // Set up auto-refresh (every 30 seconds to reduce server load)
+        // Set up auto-refresh (every 15 seconds)
         autoRefreshInterval = setInterval(() => {
             fetchLogs();
-        }, 30000);
+        }, 15000);  // Refresh every 15 seconds
 
         // Manual refresh button
         refreshBtn.addEventListener('click', () => {
@@ -196,7 +196,7 @@
             } else {
                 autoRefreshInterval = setInterval(() => {
                     fetchLogs();
-                }, 30000);  // 30 seconds to reduce server load
+                }, 15000);  // Refresh every 15 seconds
                 toggleAutoRefreshBtn.setAttribute('data-state', 'on');
                 toggleAutoRefreshBtn.innerHTML = '<i class="bi bi-play-circle me-1"></i> Auto-Refresh: ON';
             }

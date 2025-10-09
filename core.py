@@ -390,9 +390,9 @@ def continuous_query_worker(query, queue, worker_index=0, start_delay=0, priorit
             logger.debug(f"{worker_name} Failed to get priority status: {e}")
         
         # 🔥 КРИТИЧНО: refresh_delay определяется ЗДЕСЬ, ДО try-except
-        # Priority queries: 20s fixed, Normal queries: from config
+        # Priority queries: 60s fixed (6 workers × 10s rotation), Normal queries: from config
         if is_priority:
-            refresh_delay = 20  # Fixed 20s for priority queries
+            refresh_delay = 60  # Fixed 60s for priority queries (6 workers rotate every 10s)
         else:
             refresh_delay = int(db.get_parameter("query_refresh_delay") or 60)
         
@@ -609,12 +609,12 @@ def start_continuous_workers(queue):
         # Count priority and normal queries
         priority_count = sum(1 for q in all_queries if len(q) > 5 and bool(q[5]))
         normal_count = num_queries - priority_count
-        total_workers = normal_count + (priority_count * 3)  # 3 workers per priority query
+        total_workers = normal_count + (priority_count * 6)  # 6 workers per priority query
         
         logger.info(f"[WORKERS] Got {num_queries} queries ({normal_count} normal, {priority_count} priority)")
-        logger.info(f"[WORKERS] 📊 ARCHITECTURE: {total_workers} workers ({normal_count}×1 + {priority_count}×3)")
+        logger.info(f"[WORKERS] 📊 ARCHITECTURE: {total_workers} workers ({normal_count}×1 + {priority_count}×6)")
         if priority_count > 0:
-            logger.info(f"[WORKERS] ⚡ Priority queries: 3 workers each, scanning every 20s")
+            logger.info(f"[WORKERS] ⚡ Priority queries: 6 workers each, rotating every 10s")
         logger.info(f"[WORKERS] 📊 Normal queries: 1 worker each, scanning at default interval")
         
         # Initialize token pool with size matching TOTAL number of workers
@@ -658,23 +658,23 @@ def start_continuous_workers(queue):
                 )
                 worker_index += 1
         else:
-            # Priority mode: create 3 workers for priority queries, 1 for normal
+            # Priority mode: create 6 workers for priority queries, 1 for normal
             for query in all_queries:
                 query_id = query[0]
                 is_priority = len(query) > 5 and bool(query[5])
                 
                 if is_priority:
-                    # Create 3 workers for priority query with staggered start
-                    logger.info(f"[WORKERS] ⚡ Creating 3 priority workers for Query #{query_id}")
-                    for priority_idx in range(3):
-                        start_delay = priority_idx * 7  # 0s, 7s, 14s stagger
+                    # Create 6 workers for priority query with staggered start (every 10s)
+                    logger.info(f"[WORKERS] ⚡ Creating 6 priority workers for Query #{query_id}")
+                    for priority_idx in range(6):
+                        start_delay = priority_idx * 10  # 0s, 10s, 20s, 30s, 40s, 50s stagger
                         executor.submit(
                             continuous_query_worker, 
                             query, 
                             queue, 
                             worker_index=worker_index,
                             start_delay=start_delay,
-                            priority_worker_num=priority_idx + 1  # 1, 2, 3
+                            priority_worker_num=priority_idx + 1  # 1, 2, 3, 4, 5, 6
                         )
                         worker_index += 1
                 else:
@@ -705,7 +705,7 @@ def start_continuous_workers(queue):
         
         logger.info(f"[WORKERS] 🔥 All queries scanning in TRUE PARALLEL with DYNAMIC config!")
         if priority_count > 0:
-            logger.info(f"[WORKERS] ⚡ Priority queries scan every 20s (3 workers each)")
+            logger.info(f"[WORKERS] ⚡ Priority queries: 6 workers rotate every 10s (60s cycle per worker)")
         logger.info(f"[WORKERS] ⚡ Normal queries scan every {refresh_delay}s (1 worker each)")
         
         # Keep executor alive

@@ -425,8 +425,8 @@ function updateWorkerStatus(workers) {
     container.innerHTML = html;
 }
 
-// Auto-refresh worker stats every 30 seconds
-setInterval(refreshWorkerStats, 30000);
+// Auto-refresh worker stats every 10 seconds
+setInterval(refreshWorkerStats, 10000);  // Refresh every 10 seconds
 
 // Initial load
 document.addEventListener('DOMContentLoaded', function() {
@@ -704,17 +704,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Initial check
         checkProcessStatus();
         
-        // Auto-refresh redeploy status every 30 seconds
+        // Auto-refresh redeploy status every 15 seconds
         refreshRedeployStatus();
-        setInterval(refreshRedeployStatus, 30000);
+        setInterval(refreshRedeployStatus, 15000);  // Refresh every 15 seconds
         
         // Auto-refresh status checks
         refreshProxyStatus();
         refreshRedeployStatus();
         
         // Periodic refresh
-        setInterval(refreshProxyStatus, 45000);
-        setInterval(checkMigrationStatus, 60000);  // Check migration every 60 seconds
+        setInterval(refreshProxyStatus, 20000);  // Refresh every 20 seconds
+        setInterval(checkMigrationStatus, 30000);  // Check migration every 30 seconds
     });
 
     // Country Allowlist Functions (without forms)

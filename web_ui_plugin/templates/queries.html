@@ -116,7 +116,7 @@
                                            data-query-id="{{ query.query_id }}"
                                            {% if query.is_priority %}checked{% endif %}>
                                     <label class="form-check-label d-none d-sm-inline" for="priority{{ query.query_id }}">
-                                        <small class="text-muted">{% if query.is_priority %}3 workers, 20s{% else %}1 worker, 60s{% endif %}</small>
+                                        <small class="text-muted">{% if query.is_priority %}6 workers, 10s{% else %}1 worker, 60s{% endif %}</small>
                                     </label>
                                 </div>
                             </td>
@@ -302,7 +302,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Update label text immediately
             if (label) {
                 label.innerHTML = isPriority ? 
-                    '<small class="text-muted">3 workers, 20s</small>' : 
+                    '<small class="text-muted">6 workers, 10s</small>' : 
                     '<small class="text-muted">1 worker, 60s</small>';
             }
             
@@ -326,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.checked = !isPriority;
                     if (label) {
                         label.innerHTML = !isPriority ? 
-                            '<small class="text-muted">3 workers, 20s</small>' : 
+                            '<small class="text-muted">6 workers, 10s</small>' : 
                             '<small class="text-muted">1 worker, 60s</small>';
                     }
                     showToast('Failed to update priority', 'error');
@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.checked = !isPriority;
                 if (label) {
                     label.innerHTML = !isPriority ? 
-                        '<small class="text-muted">3 workers, 20s</small>' : 
+                        '<small class="text-muted">6 workers, 10s</small>' : 
                         '<small class="text-muted">1 worker, 60s</small>';
                 }
                 showToast('Error updating priority', 'error');
